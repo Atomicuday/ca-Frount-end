@@ -1,0 +1,10 @@
+/* CAFinance Screen Styling */
+.ca-finance-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ca-finance-card {
+  padding: 20px 24px;
+}

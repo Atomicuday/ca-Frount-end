@@ -1,0 +1,17 @@
+/* CADocuments Screen Styling */
+.ca-documents-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ca-doc-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: var(--color-brand-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}

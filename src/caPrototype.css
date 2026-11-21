@@ -1,0 +1,137 @@
+/* Prototype specific styling for ZapDocs CA Portal */
+
+/* Stat Cards Grid */
+.ca-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.ca-kpi-card {
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--zd-glass-bg);
+  backdrop-filter: var(--zd-glass-blur);
+  border: 1px solid var(--zd-glass-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--zd-glass-shadow);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.ca-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--zd-glass-shadow-hover);
+}
+
+.ca-kpi-icon-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ca-kpi-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.ca-kpi-label {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
+.ca-kpi-value {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-top: 2px;
+}
+
+.ca-kpi-sub {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+/* Page Header Standard */
+.ca-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.ca-page-title-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.ca-page-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  letter-spacing: -0.02em;
+}
+
+.ca-page-subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-top: 4px;
+}
+
+.ca-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Responsive Table */
+.ca-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--zd-glass-bg);
+}
+
+.ca-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: var(--font-size-sm);
+}
+
+.ca-table th {
+  padding: 12px 16px;
+  background: rgba(248, 250, 252, 0.85);
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.ca-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-primary);
+  vertical-align: middle;
+}
+
+.ca-table tr:last-child td {
+  border-bottom: none;
+}
+
+.ca-table tr:hover td {
+  background: rgba(248, 250, 252, 0.6);
+}

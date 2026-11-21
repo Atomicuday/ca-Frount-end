@@ -1,0 +1,181 @@
+/* CADashboard Screen Styling */
+.ca-dashboard-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.ca-welcome-banner {
+  padding: 24px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 246, 255, 0.85) 100%);
+}
+
+.ca-welcome-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  letter-spacing: -0.02em;
+}
+
+.ca-welcome-sub {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-top: 4px;
+}
+
+.ca-welcome-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ca-dashboard-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.ca-dashboard-card {
+  padding: 20px 24px;
+}
+
+.ca-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.ca-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.ca-card-sub {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.ca-recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ca-recent-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border-subtle);
+  transition: all var(--transition-fast);
+}
+
+.ca-recent-item:hover {
+  background: #ffffff;
+  border-color: var(--color-border);
+}
+
+.ca-recent-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--color-brand-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ca-recent-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.ca-recent-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ca-recent-client {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+  margin-top: 1px;
+}
+
+.ca-recent-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.ca-recent-date {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.ca-deadline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ca-deadline-item {
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ca-deadline-item.urgent {
+  background: rgba(254, 242, 242, 0.7);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.ca-deadline-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--status-error);
+}
+
+.ca-deadline-badge.info {
+  color: var(--color-brand);
+}
+
+.ca-deadline-info h4 {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.ca-deadline-info p {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+
+@media (max-width: 900px) {
+  .ca-dashboard-split {
+    grid-template-columns: 1fr;
+  }
+}

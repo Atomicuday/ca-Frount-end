@@ -1,0 +1,38 @@
+/* App level layout and root shell */
+.zd-app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg);
+}
+
+.zd-ca-shell {
+  background-color: var(--color-bg);
+  position: relative;
+  min-height: 100vh;
+}
+
+.zd-main-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.zd-content-viewport {
+  flex: 1;
+  padding: 24px 24px 48px;
+  max-width: 1440px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.zd-content-container {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .zd-content-viewport {
+    padding: 16px 12px 32px;
+  }
+}
