@@ -1,5 +1,5 @@
 import React from 'react';
-import { LogOut, ShieldCheck, Settings } from 'lucide-react';
+import { LogOut, ShieldCheck } from 'lucide-react';
 import ZapDocsLogo from '../../ZapDocsLogo';
 import { NAV_ITEMS } from '../navigationItems';
 import NavIcon from '../NavIcon';
@@ -29,8 +29,13 @@ export default function Sidebar({ activeNavId = 'dashboard', onNavigate, onLogou
         <ZapDocsLogo size="md" badge="CA" subtitle="Practice Suite" />
       </div>
 
-      {/* Profile Chip */}
-      <div className="ca-profile-chip">
+      {/* Profile Chip (Clickable to access Profile/Settings) */}
+      <div
+        className="ca-profile-chip"
+        onClick={() => onNavigate && onNavigate('profile')}
+        title="View Profile & Settings"
+        style={{ cursor: 'pointer' }}
+      >
         <div className="ca-chip-avatar">{initials}</div>
         <div className="ca-chip-meta">
           <div className="ca-chip-name">{user?.name || 'CA Rajesh Sharma'}</div>
@@ -68,22 +73,6 @@ export default function Sidebar({ activeNavId = 'dashboard', onNavigate, onLogou
               </li>
             );
           })}
-        </ul>
-
-        <div className="sidebar-section-label" style={{ marginTop: 20 }}>Settings</div>
-        <ul className="zd-sidebar__list" role="list">
-          <li className="zd-sidebar__item">
-            <button
-              type="button"
-              className={`zd-sidebar__link ${activeNavId === 'profile' ? 'active' : ''}`}
-              onClick={() => onNavigate && onNavigate('profile')}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Settings size={18} />
-                <span>Profile & Settings</span>
-              </div>
-            </button>
-          </li>
         </ul>
       </nav>
 

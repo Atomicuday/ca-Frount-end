@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, LogOut, ShieldCheck, Settings } from 'lucide-react';
+import { X, LogOut, ShieldCheck } from 'lucide-react';
 import ZapDocsLogo from '../../ZapDocsLogo';
 import { NAV_ITEMS } from '../navigationItems';
 import NavIcon from '../NavIcon';
@@ -33,8 +33,16 @@ export default function MobileDrawer({
           </button>
         </div>
 
-        {/* Profile Card in Drawer */}
-        <div className="ca-drawer-profile">
+        {/* Profile Card in Drawer (Clickable for Profile & Settings) */}
+        <div
+          className="ca-drawer-profile"
+          onClick={() => {
+            onNavigate && onNavigate('profile');
+            onClose();
+          }}
+          style={{ cursor: 'pointer' }}
+          title="Profile & Settings"
+        >
           <div className="ca-drawer-avatar">
             {user?.name
               ? user.name
@@ -55,7 +63,7 @@ export default function MobileDrawer({
           </div>
         </div>
 
-        {/* Navigation items */}
+        {/* Navigation items (Strictly the 4 core tabs) */}
         <nav className="ca-drawer-nav">
           <div className="ca-drawer-section-title">Navigation</div>
           <ul className="ca-drawer-list">
@@ -77,23 +85,6 @@ export default function MobileDrawer({
                 </li>
               );
             })}
-          </ul>
-
-          <div className="ca-drawer-section-title" style={{ marginTop: 20 }}>Account</div>
-          <ul className="ca-drawer-list">
-            <li>
-              <button
-                type="button"
-                className={`ca-drawer-link ${activeNavId === 'profile' ? 'active' : ''}`}
-                onClick={() => {
-                  onNavigate && onNavigate('profile');
-                  onClose();
-                }}
-              >
-                <Settings size={18} />
-                <span>Profile & Settings</span>
-              </button>
-            </li>
           </ul>
         </nav>
 
