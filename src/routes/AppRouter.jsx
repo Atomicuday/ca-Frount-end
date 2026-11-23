@@ -10,8 +10,12 @@ import {
   CAClientsPage,
   CADocumentsPage,
   CAFinancePage,
-  CAProfilePage
+  CAProfilePage,
+  CADocumentCreatePage
 } from '../pages/ca/caPages';
+import ClientDraftReviewPage from '../pages/client/ClientDraftReviewPage';
+import ClientSigningPage from '../pages/client/ClientSigningPage';
+import CALoginScreen from '../screens/CALogin/CALoginScreen';
 import { NotFoundPage } from '../pages/NotFoundPage';
 
 const CAApp = () => (
@@ -29,9 +33,13 @@ export const AppRouter = () => (
             {/* Direct entry: Redirect to CA Dashboard */}
             <Route path="/" element={<Navigate to="/ca/dashboard" replace />} />
 
-            {/* Login alias: Redirect straight to CA Dashboard in prototype shell */}
-            <Route path="/login" element={<Navigate to="/ca/dashboard" replace />} />
-            <Route path="/ca/login" element={<Navigate to="/ca/dashboard" replace />} />
+            {/* Practitioner Authentication Routes */}
+            <Route path="/login" element={<CALoginScreen />} />
+            <Route path="/ca/login" element={<CALoginScreen />} />
+
+            {/* Recipient-Facing Routes: Draft Review & Statutory Signing */}
+            <Route path="/review/:token" element={<ClientDraftReviewPage />} />
+            <Route path="/sign/:token" element={<ClientSigningPage />} />
 
             {/* CA Portal routes nested under CALayout */}
             <Route path="/ca" element={<CAApp />}>
@@ -39,6 +47,7 @@ export const AppRouter = () => (
               <Route path="dashboard" element={<CADashboardPage />} />
               <Route path="clients" element={<CAClientsPage />} />
               <Route path="documents" element={<CADocumentsPage />} />
+              <Route path="documents/create" element={<CADocumentCreatePage />} />
               <Route path="finance" element={<CAFinancePage />} />
               <Route path="profile" element={<CAProfilePage />} />
               <Route path="settings" element={<Navigate to="profile" replace />} />

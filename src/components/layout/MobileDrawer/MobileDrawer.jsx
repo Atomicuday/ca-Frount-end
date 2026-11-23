@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { X, LogOut, ShieldCheck } from 'lucide-react';
 import ZapDocsLogo from '../../ZapDocsLogo';
 import { NAV_ITEMS } from '../navigationItems';
@@ -15,6 +15,29 @@ export default function MobileDrawer({
   onLogout
 }) {
   const { t } = useLanguage();
+
+  // Close drawer on Escape key press
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  // Lock body scroll when mobile drawer is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -37,7 +60,9 @@ export default function MobileDrawer({
         <div
           className="ca-drawer-profile"
           onClick={() => {
-            onNavigate && onNavigate('profile');
+            if (onNavigate) {
+              onNavigate('profile');
+            }
             onClose();
           }}
           style={{ cursor: 'pointer' }}
@@ -75,7 +100,9 @@ export default function MobileDrawer({
                     type="button"
                     className={`ca-drawer-link ${isActive ? 'active' : ''}`}
                     onClick={() => {
-                      onNavigate && onNavigate(item.id);
+                      if (onNavigate) {
+                        onNavigate(item.id);
+                      }
                       onClose();
                     }}
                   >

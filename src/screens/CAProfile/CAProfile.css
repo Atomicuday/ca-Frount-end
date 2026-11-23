@@ -129,11 +129,31 @@
   margin-top: 24px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1023.98px) {
   .ca-profile-grid {
     grid-template-columns: 1fr;
   }
   .ca-form-row {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .ca-profile-summary-card {
+    padding: 20px 16px;
+  }
+
+  .ca-profile-form-card {
+    padding: 20px 16px;
+  }
+
+  .ca-form-actions {
+    justify-content: stretch;
+  }
+
+  .ca-form-actions button {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
   }
 }

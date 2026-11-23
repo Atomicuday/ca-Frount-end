@@ -3,6 +3,7 @@
  * Encapsulates endpoints for Dashboard, Clients, Documents, and Finance.
  */
 import { api } from './client.js';
+import { caDocumentsService } from './caDocumentsService.js';
 
 export const caService = {
   // Practice metrics & Dashboard
@@ -42,10 +43,14 @@ export const caService = {
   // Documents
   getDocuments: async (params) => {
     try {
-      return await api.get('/ca/documents', params);
+      const res = await api.get('/ca/documents', params);
+      if (Array.isArray(res)) return res;
+      if (res && Array.isArray(res.data)) return res.data;
     } catch {
-      return [];
+      // Prototype fallback
     }
+    const res = await caDocumentsService.getDocuments(params);
+    return res.data || [];
   },
 
   uploadDocument: async (docData) => {

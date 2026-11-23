@@ -6,16 +6,16 @@ export const NAV_ITEMS = [
     route: '/ca/dashboard'
   },
   {
-    id: 'clients',
-    label: 'Clients',
-    iconType: 'clients',
-    route: '/ca/clients'
-  },
-  {
     id: 'documents',
     label: 'Documents',
     iconType: 'documents',
     route: '/ca/documents'
+  },
+  {
+    id: 'clients',
+    label: 'Clients',
+    iconType: 'clients',
+    route: '/ca/clients'
   },
   {
     id: 'finance',

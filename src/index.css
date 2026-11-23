@@ -121,6 +121,9 @@
 html,
 body {
   height: 100%;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
   font-family: var(--font-family);
   background-color: var(--color-bg);
   color: var(--color-text-primary);
@@ -132,6 +135,9 @@ body {
 
 #root {
   min-height: 100%;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -229,4 +235,53 @@ body {
   background: var(--status-info-bg);
   color: var(--status-info);
   border: 1px solid var(--status-info-border);
+}
+
+/* ==========================================================================
+   Responsive Utilities & Touch Foundation
+   Breakpoints: Mobile (< 768px), Tablet (768px - 1023.98px), Desktop (>= 1024px)
+   ========================================================================== */
+
+@media (max-width: 767.98px) {
+  /* Prevent iOS Safari automatic viewport zooming on text inputs */
+  input[type="text"],
+  input[type="password"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="number"],
+  input[type="search"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* Accessible touch target foundation (minimum 44x44px) */
+  .btn,
+  .zd-btn-action,
+  .zd-nav-tab,
+  .zd-icon-round-btn,
+  .topbar-menu-btn,
+  .ca-drawer-close-btn,
+  .ca-drawer-link,
+  .zd-modal-close-btn,
+  .zd-filter-pill,
+  .ca-filter-pill {
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+
+  .btn {
+    padding: 10px 16px;
+  }
+}
+
+/* Responsive Table Scroll Container Foundation */
+.zd-table-responsive-container,
+.ca-table-wrap,
+.zd-docs-table-scroll-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
 }

@@ -115,6 +115,8 @@
   top: calc(100% + 6px);
   right: 0;
   min-width: 180px;
+  max-width: calc(100vw - 24px);
+  width: min(220px, calc(100vw - 24px));
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(20px);
   border: 1px solid var(--color-border);
@@ -178,6 +180,7 @@
   top: calc(100% + 8px);
   right: 0;
   width: 290px;
+  max-width: calc(100vw - 24px);
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(20px);
   border: 1px solid var(--color-border);
@@ -185,6 +188,7 @@
   box-shadow: 0 20px 40px -4px rgba(15, 23, 42, 0.14);
   z-index: 1000;
   padding: 16px;
+  box-sizing: border-box;
 }
 
 .zd-profile-card-header {
@@ -329,19 +333,65 @@
   justify-content: center;
   z-index: 99999;
   padding: 16px;
+  box-sizing: border-box;
 }
 
 .zd-logout-modal-content {
   width: min(400px, 92vw);
+  max-width: calc(100% - 32px);
   padding: 24px;
+  box-sizing: border-box;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1023.98px) {
   .zd-header__menu-btn {
     display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
   }
   .zd-header__desktop-nav,
   .zd-header__brand-divider {
     display: none;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .zd-header__nav-row {
+    padding: 0 14px;
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+
+  .zd-header__nav-left {
+    gap: 10px;
+  }
+
+  .zd-header__nav-right {
+    gap: 8px;
+  }
+
+  .zd-lang-pill-btn {
+    padding: 6px 10px;
+    min-height: 40px;
+  }
+
+  .zd-icon-round-btn {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 600px) {
+  .zd-logo-tagline {
+    display: none !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .zd-header__brand-block {
+    max-width: 170px;
+    overflow: hidden;
   }
 }

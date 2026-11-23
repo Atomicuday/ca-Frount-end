@@ -74,6 +74,7 @@ export const ZapDocsLogo = ({
         </div>
         {displayTagline && (
           <span
+            className="zd-logo-tagline"
             style={{
               fontSize: config.taglineSize,
               fontWeight: 500,
