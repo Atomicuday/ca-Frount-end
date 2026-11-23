@@ -11,7 +11,7 @@ const LanguageContext = createContext({
   displayCode: "EN",
   availableLanguages: AVAILABLE_LANGUAGES,
   setLanguage: () => {},
-  t: (key, fallback) => key,
+  t: (key, fallback) => fallback || key,
   caJurisdictionState: "Karnataka",
   setCaJurisdictionState: () => {}
 });

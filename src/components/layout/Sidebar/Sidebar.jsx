@@ -32,7 +32,9 @@ export default function Sidebar({ activeNavId = 'dashboard', onNavigate, onLogou
       {/* Profile Chip (Clickable to access Profile/Settings) */}
       <div
         className="ca-profile-chip"
-        onClick={() => onNavigate && onNavigate('profile')}
+        onClick={() => {
+          if (onNavigate) onNavigate('profile');
+        }}
         title="View Profile & Settings"
         style={{ cursor: 'pointer' }}
       >
@@ -60,7 +62,9 @@ export default function Sidebar({ activeNavId = 'dashboard', onNavigate, onLogou
                 <button
                   type="button"
                   className={`zd-sidebar__link ${isActive ? 'active' : ''}`}
-                  onClick={() => onNavigate && onNavigate(item.id)}
+                  onClick={() => {
+                    if (onNavigate) onNavigate(item.id);
+                  }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <NavIcon name={item.iconType} size={18} />

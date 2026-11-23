@@ -150,7 +150,6 @@ activemq-data/
 *.sage.py
 
 # Environments
-.env
 .envrc
 .venv
 env/
@@ -227,8 +226,8 @@ node_modules/
 dist/
 dist-ssr/
 *.local
-.env
 .env.*.local
 .vite/
 .tmp/
 
+config.bat

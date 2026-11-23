@@ -9,7 +9,7 @@
 }
 
 .ca-drawer-sheet {
-  width: min(300px, 85vw);
+  width: min(320px, 85vw);
   background: rgba(255, 255, 255, 0.98);
   backdrop-filter: blur(24px);
   height: 100%;
@@ -17,6 +17,9 @@
   flex-direction: column;
   box-shadow: 0 20px 40px -4px rgba(15, 23, 42, 0.2);
   animation: slideIn 200ms ease-out;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
 }
 
 @keyframes slideIn {
@@ -41,8 +44,13 @@
   border: none;
   cursor: pointer;
   color: var(--color-text-secondary);
-  padding: 6px;
+  padding: 8px;
   border-radius: var(--radius-sm);
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .ca-drawer-profile {
@@ -112,7 +120,8 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 10px 14px;
+  min-height: 44px;
   border-radius: var(--radius-md);
   border: none;
   background: transparent;
@@ -122,6 +131,7 @@
   font-weight: 600;
   cursor: pointer;
   text-align: left;
+  box-sizing: border-box;
 }
 
 .ca-drawer-link:hover {
@@ -144,7 +154,8 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 8px 12px;
+  padding: 10px 14px;
+  min-height: 44px;
   border-radius: var(--radius-md);
   border: none;
   background: transparent;
@@ -153,6 +164,7 @@
   font-size: var(--font-size-sm);
   font-weight: 600;
   cursor: pointer;
+  box-sizing: border-box;
 }
 
 .ca-drawer-logout-btn:hover {

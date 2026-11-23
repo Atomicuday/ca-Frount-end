@@ -88,3 +88,346 @@
   justify-content: center;
   flex-shrink: 0;
 }
+
+/* Aadhaar Input with Masking & Eye Toggle */
+.zd-aadhaar-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.zd-aadhaar-input {
+  width: 100%;
+  padding-right: 42px !important;
+}
+
+.zd-aadhaar-eye-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  padding: 6px;
+  cursor: pointer;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.zd-aadhaar-eye-btn:hover {
+  color: #0f172a;
+  background-color: #f1f5f9;
+}
+
+.zd-field-subtext-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+/* ==========================================================================
+   Add Client & Create Document Modal - Compact Sizing (Scoped)
+   ========================================================================== */
+
+.zd-modal-card.zd-add-client-modal-card {
+  width: calc(100% - 32px) !important;
+  max-width: 520px !important;
+  min-width: 0 !important;
+  max-height: calc(100vh - 32px) !important;
+  max-height: calc(100dvh - 32px) !important;
+  height: auto;
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 0 !important;
+  border-radius: 16px;
+  overflow: hidden !important;
+  box-sizing: border-box;
+  margin: auto;
+}
+
+/* 1. Header (Fixed/Accessible at top with consistent 20-24px padding) */
+.zd-add-client-modal-card .zd-modal-header {
+  flex-shrink: 0;
+  padding: 20px 24px 16px;
+  margin-bottom: 0;
+  border-bottom: 1px solid #eef2f6;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+/* 2. Scrollable Form Body */
+.zd-add-client-modal-card .zd-add-client-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  margin: 0;
+}
+
+.zd-add-client-modal-card .zd-add-client-form-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 20px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
+}
+
+.zd-add-client-modal-card .zd-add-client-form-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.zd-add-client-modal-card .zd-add-client-form-body::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+
+.zd-add-client-modal-card .zd-add-client-form-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.zd-add-client-modal-card .zd-add-client-form-body::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* 3. Single-Column Form Layout */
+.zd-add-client-modal-card .zd-form-grid-2 {
+  display: flex !important;
+  flex-direction: column !important;
+  grid-template-columns: 1fr !important;
+  gap: 14px !important;
+  width: 100%;
+}
+
+.zd-add-client-modal-card .zd-form-field {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.zd-add-client-modal-card .zd-form-input,
+.zd-add-client-modal-card .zd-form-select,
+.zd-add-client-modal-card .zd-phone-input-group,
+.zd-add-client-modal-card .zd-aadhaar-input-wrap,
+.zd-add-client-modal-card .glass-select-wrap {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.zd-add-client-modal-card .zd-template-schema-section,
+.zd-add-client-modal-card .zd-template-specific-box {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 4. Footer (Fixed/Accessible at bottom with consistent 20-24px padding) */
+.zd-add-client-modal-card .zd-modal-actions,
+.zd-add-client-modal-card .zd-add-client-footer {
+  flex-shrink: 0;
+  padding: 16px 24px 20px;
+  margin-top: 0 !important;
+  border-top: 1px solid #eef2f6;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  box-sizing: border-box;
+}
+
+/* 5. Submodal / Field Entry Dialog Overlay */
+.zd-submodal-backdrop,
+.zd-field-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.zd-submodal-card,
+.zd-field-dialog-card {
+  width: 100%;
+  max-width: 420px;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 20px 40px -8px rgba(15, 23, 42, 0.2);
+  box-sizing: border-box;
+}
+
+.zd-submodal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eef2f6;
+}
+
+.zd-submodal-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+/* 6. Mobile & Narrow Screen Responsive Adjustments */
+@media (max-width: 480px) {
+  .zd-modal-card.zd-add-client-modal-card {
+    width: calc(100% - 20px) !important;
+    max-height: calc(100vh - 20px) !important;
+    max-height: calc(100dvh - 20px) !important;
+    border-radius: 14px;
+  }
+
+  .zd-add-client-modal-card .zd-modal-header {
+    padding: 16px 18px 14px;
+  }
+
+  .zd-add-client-modal-card .zd-add-client-form-body {
+    padding: 16px 18px 20px;
+    gap: 14px;
+  }
+
+  .zd-add-client-modal-card .zd-modal-actions,
+  .zd-add-client-modal-card .zd-add-client-footer {
+    padding: 14px 18px 16px;
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .zd-add-client-modal-card .zd-modal-actions button,
+  .zd-add-client-modal-card .zd-add-client-footer button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* 7. Mobile Client Records List & Responsive Filter Toolbar (< 768px) */
+.ca-mobile-clients-list {
+  display: none;
+}
+
+@media (max-width: 767.98px) {
+  .ca-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .ca-search-input-wrap,
+  .ca-filters-dropdown-wrap {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ca-filters-dropdown-wrap .zd-btn-filter {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .ca-table {
+    display: none;
+  }
+
+  .ca-mobile-clients-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .ca-pagination-bar {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    border-top: 1px solid #eef2f6;
+  }
+
+  .ca-pagination-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .ca-pagination-btn {
+    flex: 1;
+    justify-content: center;
+    min-height: 44px;
+  }
+}
+
+.ca-mobile-client-card {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+}
+
+.ca-mobile-client-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ca-mobile-client-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: #334155;
+}
+
+.ca-mobile-meta-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.ca-mobile-client-contact-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: #0f172a;
+}
+
+.ca-mobile-client-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}

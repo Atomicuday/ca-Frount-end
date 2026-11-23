@@ -1,84 +1,485 @@
+/* ==========================================================================
+   ZapDocs Shared GlassSelect Component Styling
+   ========================================================================== */
+
 .glass-select-wrap {
   position: relative;
   width: 100%;
+  box-sizing: border-box;
 }
 
+/* 1. Main Full-Width Trigger Field */
 .glass-select-trigger {
   width: 100%;
+  min-height: 42px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
-  background: var(--zd-glass-bg);
-  backdrop-filter: var(--zd-glass-blur);
-  -webkit-backdrop-filter: var(--zd-glass-blur);
-  border: 1px solid var(--zd-glass-border);
-  border-radius: var(--radius-md);
+  gap: 12px;
+  padding: 9px 13px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
   font-family: inherit;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-primary);
+  font-size: 13px;
+  color: #0f172a;
   cursor: pointer;
   text-align: left;
-  transition: all var(--transition-fast);
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
 .glass-select-trigger:hover:not(:disabled) {
-  border-color: var(--color-border-hover);
-  background: var(--zd-glass-bg-hover);
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.glass-select-trigger:focus,
+.glass-select-trigger.is-open {
+  outline: none;
+  border-color: #2563eb;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.glass-select-trigger.has-error {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12) !important;
+}
+
+.glass-select-trigger:disabled {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #94a3b8;
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.glass-select-trigger-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.glass-select-leading-icon {
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.glass-select-label-wrap {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glass-select-label {
+  display: block;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glass-select-label.selected-text {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.glass-select-label.placeholder-text {
+  color: #94a3b8;
+  font-weight: 400;
 }
 
 .glass-select-arrow {
-  color: var(--color-text-secondary);
-  transition: transform var(--transition-fast);
+  color: #64748b;
+  flex-shrink: 0;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.glass-select-arrow.open {
+.glass-select-arrow.is-open {
   transform: rotate(180deg);
+  color: #2563eb;
 }
 
+/* 2. Floating Dropdown Menu (Positioned Directly Below, Never Inlined) */
 .glass-select-dropdown {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 5px);
   left: 0;
   right: 0;
-  max-height: 240px;
+  z-index: 1050;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 14px 34px -4px rgba(15, 23, 42, 0.14), 0 4px 12px rgba(15, 23, 42, 0.06);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-sizing: border-box;
+  animation: zdDropdownIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes zdDropdownIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 3. Search Bar Inside Opened List Only */
+.glass-select-search-wrap {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  margin-bottom: 4px;
+}
+
+.glass-select-search-icon {
+  position: absolute;
+  left: 10px;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.glass-select-search-input {
+  width: 100%;
+  padding: 8px 12px 8px 32px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: #0f172a;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.glass-select-search-input:focus {
+  border-color: #2563eb;
+  background: #ffffff;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+.glass-select-search-input::placeholder {
+  color: #94a3b8;
+}
+
+/* 4. Options List with Internal Scrolling */
+.glass-select-options-list {
+  max-height: 250px;
   overflow-y: auto;
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--zd-glass-border);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 16px 36px -4px rgba(15, 23, 42, 0.12);
-  z-index: 1000;
-  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 2px;
+  box-sizing: border-box;
+}
+
+.glass-select-options-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.glass-select-options-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.glass-select-options-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.glass-select-options-list::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* 5. Individual Clickable Template Row */
+.glass-select-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.12s ease;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.glass-select-option:hover,
+.glass-select-option.is-highlighted {
+  background: #f1f5f9;
+}
+
+.glass-select-option.is-selected {
+  background: #eff6ff;
+}
+
+.glass-select-option.is-selected .glass-select-option-title {
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.glass-select-option-content {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.glass-select-option {
+.glass-select-option-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  border: none;
-  background: transparent;
+  gap: 8px;
+}
+
+.glass-select-option-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.35;
+}
+
+.glass-select-code-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #475569;
+  background: #e2e8f0;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.glass-select-option-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: #64748b;
+  line-height: 1.3;
+}
+
+.glass-select-category-text {
+  font-weight: 500;
+  color: #2563eb;
+}
+
+.glass-select-meta-dot {
+  color: #94a3b8;
+}
+
+.glass-select-desc-text {
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glass-select-check-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.glass-select-check-icon {
+  color: #2563eb;
+}
+
+/* 6. Loading, Error, and Empty States */
+.glass-select-status {
+  padding: 14px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12.5px;
+  border-radius: 6px;
+}
+
+.glass-select-loading {
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.glass-select-error {
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.glass-select-empty {
+  padding: 16px 12px;
+  text-align: center;
+  font-size: 12.5px;
+  color: #64748b;
+  background: #f8fafc;
+  border-radius: 6px;
+}
+
+/* Compatibility Aliases for Legacy or Fallback Classes */
+.zd-custom-select-wrap,
+.zd-custom-dropdown-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.zd-custom-select-trigger,
+.zd-custom-dropdown-trigger {
+  width: 100%;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 13px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
   font-family: inherit;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-primary);
+  font-size: 13px;
+  color: #0f172a;
   cursor: pointer;
   text-align: left;
-  transition: background var(--transition-fast);
+  box-sizing: border-box;
 }
 
-.glass-select-option:hover {
-  background: var(--color-brand-light);
-  color: var(--color-brand);
+.zd-custom-select-trigger:hover,
+.zd-custom-dropdown-trigger:hover {
+  border-color: #94a3b8;
+  background: #f8fafc;
 }
 
-.glass-select-option.selected {
-  background: var(--color-brand-light);
-  color: var(--color-brand);
+.zd-custom-select-trigger.open,
+.zd-custom-dropdown-trigger.is-open {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.zd-custom-select-dropdown,
+.zd-custom-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  right: 0;
+  z-index: 1050;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 14px 34px -4px rgba(15, 23, 42, 0.14), 0 4px 12px rgba(15, 23, 42, 0.06);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-sizing: border-box;
+}
+
+.zd-dropdown-search-wrap {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  margin-bottom: 4px;
+}
+
+.zd-dropdown-search-input {
+  width: 100%;
+  padding: 8px 12px 8px 32px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: #0f172a;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.zd-dropdown-options-list {
+  max-height: 250px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.zd-dropdown-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  box-sizing: border-box;
+  border: none;
+  width: 100%;
+}
+
+.zd-dropdown-option:hover {
+  background: #f1f5f9;
+}
+
+.zd-dropdown-option.selected,
+.zd-dropdown-option.is-selected {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.zd-opt-title,
+.zd-option-name {
+  font-size: 13px;
   font-weight: 600;
+  color: #0f172a;
+}
+
+.zd-opt-meta,
+.zd-option-desc {
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+/* Mobile & Touch Adjustments (< 768px) */
+@media (max-width: 767.98px) {
+  .glass-select-trigger {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .glass-select-label {
+    font-size: 15px;
+  }
+
+  .glass-select-search-input,
+  .zd-dropdown-search-input {
+    font-size: 16px !important;
+    min-height: 42px;
+  }
+
+  .glass-select-option,
+  .zd-dropdown-option {
+    min-height: 44px;
+    padding: 10px 12px;
+  }
 }
