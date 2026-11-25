@@ -167,3 +167,5 @@ export const EmptyState = ({ title = 'No records found', message, actionText, on
     )}
   </div>
 );
+
+export { default as TablePagination } from './common/TablePagination.jsx';

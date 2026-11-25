@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Layers, ArrowRight } from 'lucide-react';
+import { Layers } from 'lucide-react';
 
 export default function PipelineChart({ stages = [] }) {
-  const navigate = useNavigate();
   const [hoveredStageId, setHoveredStageId] = useState(null);
 
   const totalPending = stages.reduce((acc, curr) => acc + (typeof curr.count === 'number' ? curr.count : 0), 0);
@@ -26,17 +24,6 @@ export default function PipelineChart({ stages = [] }) {
 
   const rowHeight = (baselineY - topY) / Math.max(1, stages.length);
 
-  const handleStageClick = (stageId) => {
-    navigate(`/ca/documents?stage=${encodeURIComponent(stageId)}`);
-  };
-
-  const handleKeyDown = (event, stageId) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      handleStageClick(stageId);
-    }
-  };
-
   const hoveredStage = stages.find((s) => s.id === hoveredStageId);
 
   return (
@@ -56,7 +43,7 @@ export default function PipelineChart({ stages = [] }) {
         </div>
       </div>
 
-      {/* Proper Horizontal Bar Chart */}
+      {/* Proper Horizontal Bar Chart - Display Only */}
       <div className="zd-horizontal-barchart-wrap">
         <svg
           className="zd-hbar-chart-svg"
@@ -123,7 +110,7 @@ export default function PipelineChart({ stages = [] }) {
             Document Count
           </text>
 
-          {/* Horizontal Bars & Y-Axis Labels */}
+          {/* Horizontal Bars & Y-Axis Labels (Display Only) */}
           {stages.map((stage, index) => {
             const centerY = topY + index * rowHeight + rowHeight / 2;
             const barH = 18;
@@ -140,10 +127,8 @@ export default function PipelineChart({ stages = [] }) {
                 className={`zd-hbar-item-group ${isHovered ? 'hovered' : ''}`}
                 tabIndex={0}
                 role="graphics-symbol"
-                aria-label={`${stage.label}: ${count} documents (${percentage}% of pending). Click to filter.`}
-                style={{ cursor: 'pointer', outline: 'none' }}
-                onClick={() => handleStageClick(stage.id)}
-                onKeyDown={(e) => handleKeyDown(e, stage.id)}
+                aria-label={`${stage.label}: ${count} documents (${percentage}% of pending).`}
+                style={{ cursor: 'default', outline: 'none' }}
                 onMouseEnter={() => setHoveredStageId(stage.id)}
                 onFocus={() => setHoveredStageId(stage.id)}
                 onBlur={() => setHoveredStageId(null)}
@@ -254,16 +239,6 @@ export default function PipelineChart({ stages = [] }) {
         <span className="zd-hbar-footer-note">
           * Mutually exclusive stages sum to {totalPending} documents; reconciles with Pending Documents.
         </span>
-        <button
-          type="button"
-          className="zd-recent-view-all-btn"
-          style={{ padding: '4px 10px', fontSize: 11.5 }}
-          onClick={() => navigate('/ca/documents?status=pending')}
-          title="Filter all pending documents in vault"
-        >
-          <span>Filter in Vault</span>
-          <ArrowRight size={12} aria-hidden="true" />
-        </button>
       </div>
     </div>
   );

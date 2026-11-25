@@ -3,16 +3,16 @@ import { TrendingUp, RefreshCw } from 'lucide-react';
 import { caDashboardService } from '../../services/api/caDashboardService.js';
 
 export default function ActivityChart() {
-  const [granularity, setGranularity] = useState('month'); // 'day' | 'month' | 'year' (Default: month)
+  const [period, setPeriod] = useState('1m'); // 'today' | '7d' | '2w' | '3w' | '1m' | '1y' (Default: 1m)
   const [activityPayload, setActivityPayload] = useState(null);
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Fetch activity points based on selected granularity
-  const loadActivityData = useCallback(async (selectedGranularity, showSpinner = false) => {
+  // Fetch activity points based on selected period
+  const loadActivityData = useCallback(async (selectedPeriod, showSpinner = false) => {
     if (showSpinner) setIsRefreshing(true);
     try {
-      const payload = await caDashboardService.getActivityByGranularity(selectedGranularity);
+      const payload = await caDashboardService.getActivityByPeriod(selectedPeriod);
       setActivityPayload(payload);
     } finally {
       if (showSpinner) {
@@ -22,8 +22,8 @@ export default function ActivityChart() {
   }, []);
 
   useEffect(() => {
-    loadActivityData(granularity, false);
-  }, [granularity, loadActivityData]);
+    loadActivityData(period, false);
+  }, [period, loadActivityData]);
 
   // SVG Geometry calculations
   const viewBoxWidth = 640;
@@ -40,13 +40,15 @@ export default function ActivityChart() {
     .filter((pt) => typeof pt.count === 'number')
     .map((pt) => pt.count);
 
-  const rawMax = Math.max(granularity === 'day' ? 4 : 10, ...validCounts);
-  const yStep = granularity === 'day' ? (rawMax <= 6 ? 1 : 2) : granularity === 'month' ? 10 : 50;
-  const yMax = Math.ceil(rawMax / yStep) * yStep || (granularity === 'day' ? 4 : 40);
+  const rawMax = Math.max(period === 'today' ? 3 : period === '7d' ? 4 : 8, ...validCounts);
+  const yStep = rawMax <= 4 ? 1 : rawMax <= 10 ? 2 : rawMax <= 30 ? 5 : 10;
+  const yMax = Math.ceil(rawMax / yStep) * yStep || 4;
 
-  const ticks = granularity === 'day' && yMax <= 6
+  const ticks = yMax <= 4
     ? Array.from({ length: yMax + 1 }, (_, i) => yMax - i)
-    : [yMax, Math.round(yMax * 0.75), Math.round(yMax * 0.5), Math.round(yMax * 0.25), 0];
+    : [yMax, Math.round(yMax * 0.75), Math.round(yMax * 0.5), Math.round(yMax * 0.25), 0].filter(
+        (v, i, a) => a.indexOf(v) === i
+      );
 
   const totalPoints = points.length;
   const mappedPoints = points.map((item, index) => {
@@ -90,7 +92,7 @@ export default function ActivityChart() {
 
   return (
     <div className="zd-analytics-card zd-glass-card" id="card-activity-trend" style={{ minHeight: 290 }}>
-      {/* Graph Header with ONE View by Dropdown */}
+      {/* Graph Header with Date-Range Dropdown */}
       <div className="zd-trend-header">
         <div className="zd-trend-title-block">
           <div className="zd-trend-icon-badge" aria-hidden="true">
@@ -107,21 +109,24 @@ export default function ActivityChart() {
         </div>
 
         <div className="zd-trend-controls">
-          {/* ONE Dropdown: View by (Day, Month, Year) */}
+          {/* Period Dropdown (Today, 7 Days, 2 Weeks, 3 Weeks, 1 Month, 1 Year) */}
           <div className="zd-year-dropdown-wrap">
-            <label htmlFor="select-activity-granularity" className="zd-year-label">
-              <span>View by:</span>
+            <label htmlFor="select-activity-period" className="zd-year-label">
+              <span>Period:</span>
             </label>
             <select
-              id="select-activity-granularity"
+              id="select-activity-period"
               className="zd-select-year"
-              value={granularity}
-              onChange={(e) => setGranularity(e.target.value)}
-              aria-label="Select time granularity for document activity graph"
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              aria-label="Select time period for document activity graph"
             >
-              <option value="day">Day</option>
-              <option value="month">Month</option>
-              <option value="year">Year</option>
+              <option value="today">Today</option>
+              <option value="7d">7 Days</option>
+              <option value="2w">2 Weeks</option>
+              <option value="3w">3 Weeks</option>
+              <option value="1m">1 Month</option>
+              <option value="1y">1 Year</option>
             </select>
           </div>
 
@@ -129,8 +134,8 @@ export default function ActivityChart() {
           <button
             type="button"
             className={`zd-trend-refresh-btn ${isRefreshing ? 'spinning' : ''}`}
-            onClick={() => loadActivityData(granularity, true)}
-            title={`Refresh activity data for ${granularity}`}
+            onClick={() => loadActivityData(period, true)}
+            title={`Refresh activity data for ${period}`}
             aria-label="Refresh activity data"
           >
             <RefreshCw size={14} color="#64748b" />
@@ -225,21 +230,34 @@ export default function ActivityChart() {
                 const isHovered = hoveredIndex === idx;
                 const isPartial = pt.isPartial;
 
-                // For 'day' view with 30 points, show X label at intervals to prevent overlap
-                const shouldShowXLabel = granularity === 'day'
-                  ? (idx === 0 || idx === totalPoints - 1 || idx % 5 === 0)
-                  : true;
+                // Smart X-axis label filtering to avoid crowding on dense intervals
+                const shouldShowXLabel = (() => {
+                  if (period === '7d' || period === '1y') return true;
+                  if (period === 'today') {
+                    return totalPoints <= 12 ? true : (idx === 0 || idx === totalPoints - 1 || idx % 2 === 0);
+                  }
+                  if (period === '2w') {
+                    return idx === 0 || idx === totalPoints - 1 || idx % 2 === 0;
+                  }
+                  if (period === '3w') {
+                    return idx === 0 || idx === totalPoints - 1 || idx % 3 === 0;
+                  }
+                  if (period === '1m') {
+                    return idx === 0 || idx === totalPoints - 1 || idx % 4 === 0;
+                  }
+                  return idx === 0 || idx === totalPoints - 1 || idx % 4 === 0;
+                })();
 
                 return (
                   <g
                     key={`${pt.label}-${idx}`}
                     className={`zd-trend-point-group ${isPartial ? 'latest-point' : ''} ${isHovered ? 'hovered' : ''}`}
                   >
-                    {/* Invisible Hitbox */}
+                    {/* Hitbox */}
                     <circle
                       cx={pt.x}
                       cy={pt.y !== null ? pt.y : baselineY}
-                      r={granularity === 'day' ? '10' : '18'}
+                      r={totalPoints > 20 ? '10' : '16'}
                       fill="transparent"
                       tabIndex="0"
                       role="img"
@@ -257,7 +275,7 @@ export default function ActivityChart() {
                         cy={pt.y}
                         r={isPartial
                           ? (isHovered ? '6.5' : '5.5')
-                          : (granularity === 'day' ? (isHovered ? '4.5' : '3.5') : (isHovered ? '5' : '4'))}
+                          : (totalPoints > 20 ? (isHovered ? '4.5' : '3.5') : (isHovered ? '5' : '4'))}
                         fill={isPartial ? '#f59e0b' : '#ffffff'}
                         stroke={isPartial ? '#ffffff' : '#2563eb'}
                         strokeWidth="2.5"
@@ -271,7 +289,7 @@ export default function ActivityChart() {
                         x={pt.x}
                         y={baselineY + 18}
                         textAnchor="middle"
-                        fontSize={isPartial ? '12.5' : granularity === 'day' ? '10.5' : '11.5'}
+                        fontSize={isPartial ? '12.5' : totalPoints > 20 ? '10.5' : '11.5'}
                         fontWeight={isPartial ? '800' : '600'}
                         fill={isPartial ? '#2563eb' : '#475569'}
                         fontFamily="inherit"
@@ -292,8 +310,8 @@ export default function ActivityChart() {
                 const isPartial = pt.isPartial;
                 const isHovered = hoveredIndex === idx;
 
-                // In 'day' mode, only render badges for partial or hovered points to avoid clutter
-                if (granularity === 'day' && !isPartial && !isHovered) {
+                // When points are dense, only render badges for partial or hovered points
+                if (totalPoints > 12 && !isPartial && !isHovered) {
                   return null;
                 }
 
@@ -352,10 +370,11 @@ export default function ActivityChart() {
 
             {/* Interactive SVG Tooltip */}
             {activePoint && (() => {
-              const tooltipText = `${activePoint.label} · ${activePoint.count} Completed${
-                activePoint.isPartial ? ' (Partial in progress)' : ''
+              const pointDate = activePoint.fullDateLabel || activePoint.dateStr || activePoint.label;
+              const tooltipText = `${pointDate} · ${activePoint.count} Completed${
+                activePoint.isPartial ? ' (In Progress)' : ''
               }`;
-              const tooltipWidth = Math.min(260, tooltipText.length * 7.5 + 20);
+              const tooltipWidth = Math.min(290, tooltipText.length * 7.5 + 24);
               const tooltipHeight = 32;
               const tooltipX = Math.max(
                 startX - 10,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Send, Mail, CheckCircle2, AlertCircle, MessageCircle, ShieldCheck, Users } from 'lucide-react';
 import { caDocumentsService } from '../../../services/api/caDocumentsService.js';
 
@@ -7,6 +7,23 @@ export default function SendLinkModal({ isOpen, onClose, document, onDispatchLin
   const [loading, setLoading] = useState(false);
   const [successResult, setSuccessResult] = useState(null);
   const [error, setError] = useState('');
+
+  const handleClose = () => {
+    setSuccessResult(null);
+    setError('');
+    onClose();
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
 
   if (!isOpen || !document) return null;
 
@@ -60,15 +77,9 @@ export default function SendLinkModal({ isOpen, onClose, document, onDispatchLin
     }
   };
 
-  const handleClose = () => {
-    setSuccessResult(null);
-    setError('');
-    onClose();
-  };
-
   return (
     <div className="zd-modal-backdrop" onClick={handleClose} role="dialog" aria-modal="true" aria-labelledby="send-link-modal-title">
-      <div className="zd-modal-card zd-glass-card zd-send-link-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 580 }}>
+      <div className="zd-modal-card zd-glass-card zd-send-link-modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="zd-modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div className="zd-modal-icon-badge">
@@ -97,7 +108,7 @@ export default function SendLinkModal({ isOpen, onClose, document, onDispatchLin
         </div>
 
         {successResult ? (
-          <div className="zd-send-success-box">
+          <div className="zd-modal-body zd-send-success-box">
             <CheckCircle2 size={40} color="#10b981" />
             <h3 style={{ fontSize: 17, fontWeight: 700, margin: '10px 0 4px', color: '#0f172a' }}>
               Invitation Successfully Dispatched!
@@ -139,7 +150,7 @@ export default function SendLinkModal({ isOpen, onClose, document, onDispatchLin
             </div>
           </div>
         ) : (
-          <div className="zd-send-modal-body">
+          <div className="zd-modal-body zd-send-modal-body">
             {error && (
               <div className="zd-modal-alert zd-modal-alert--error" style={{ marginBottom: 14 }}>
                 <AlertCircle size={15} />

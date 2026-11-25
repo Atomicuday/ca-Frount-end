@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   Search,
   SlidersHorizontal,
   Plus,
   FileText,
   Edit3,
+  Pencil,
   Lock,
   MessageSquare,
   Send,
   AlertCircle,
+  AlertTriangle,
   RotateCcw,
   ChevronLeft,
   ChevronRight,
@@ -19,11 +22,16 @@ import {
   FileCheck,
   Loader2,
   Eye,
-  Download
+  Download,
+  Clock,
+  Users,
+  ShieldCheck,
+  Cpu
 } from 'lucide-react';
 import { caDocumentsService } from '../../services/api/caDocumentsService';
+import { caClientService } from '../../services/api/caClientService';
 import { DOCUMENT_STATUSES, DOCUMENT_TYPES } from '../../mock/caDocumentsData';
-import { LoadingState, ErrorState } from '../../components/shared';
+import { LoadingState, ErrorState, TablePagination } from '../../components/shared';
 
 import AddClientModal from './modals/AddClientModal';
 import EditInputsModal from './modals/EditInputsModal';
@@ -35,12 +43,30 @@ import CompletionModal from './modals/CompletionModal';
 
 import './CADocuments.css';
 
+// Remove visible version labels (e.g. "v1", "v2", "(v2)", "(Draft Revision v2)") and format clean titles to match practice view
+const cleanDocDisplayTitle = (title) => {
+  if (!title) return '';
+  return title
+    .replace(/^FY\s+\d{4}-\d{2,4}\s+/i, '')
+    .replace(/Professional\s+Income\s+Computation\s+&\s+Capital\s+Gains/i, 'Income Computation')
+    .replace(/&\s+Form\s+MGT-14\s+Pack/i, '& MGT-14')
+    .replace(/\s+Sheet$/i, '')
+    .replace(/\s*\(Draft Revision.*?\)/gi, '')
+    .replace(/\s*\(v\d+\)/gi, '')
+    .replace(/\s+v\d+\b/gi, '')
+    .trim();
+};
+
 export default function CADocumentsScreen() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const clientId = searchParams.get('clientId') || '';
+
   // Query & Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [dateRangeFilter, setDateRangeFilter] = useState('ALL');
+  const [clientFilterName, setClientFilterName] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10);
 
@@ -60,6 +86,32 @@ export default function CADocumentsScreen() {
   const [activeModal, setActiveModal] = useState(null); // 'add_client' | 'edit_inputs' | 'edit_requests' | 'send_link' | 'preview'
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
+
+  // Resolve client name when filtered by clientId
+  useEffect(() => {
+    let isMounted = true;
+    if (clientId) {
+      caClientService
+        .getClientById(clientId)
+        .then((c) => {
+          if (isMounted && c?.name) {
+            setClientFilterName(c.name);
+          }
+        })
+        .catch(() => {});
+    } else {
+      setClientFilterName('');
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [clientId]);
+
+  // Fallback to client name found in documents or clientId itself
+  const displayClientName =
+    clientFilterName ||
+    documents.find((d) => String(d.clientId || '').toLowerCase() === String(clientId).toLowerCase())?.client ||
+    clientId;
 
   // Live Toast Notification
   const showToast = (message, type = 'info') => {
@@ -134,6 +186,7 @@ export default function CADocumentsScreen() {
         status: statusFilter,
         docType: typeFilter,
         dateRange: dateRangeFilter,
+        clientId: clientId || null,
         page: currentPage,
         limit: pageSize
       });
@@ -147,7 +200,7 @@ export default function CADocumentsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, statusFilter, typeFilter, dateRangeFilter, currentPage, pageSize]);
+  }, [searchQuery, statusFilter, typeFilter, dateRangeFilter, clientId, currentPage, pageSize]);
 
   useEffect(() => {
     loadDocuments();
@@ -167,11 +220,22 @@ export default function CADocumentsScreen() {
     setFiltersOpen(false);
   };
 
+  // Dedicated action to clear the client filter while preserving any text search
+  const handleClearClientFilter = () => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('clientId');
+    setSearchParams(nextParams);
+    setCurrentPage(1);
+  };
+
   const handleClearFilters = () => {
     setStatusFilter('ALL');
     setTypeFilter('ALL');
     setDateRangeFilter('ALL');
     setSearchQuery('');
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('clientId');
+    setSearchParams(nextParams);
     setCurrentPage(1);
     setFiltersOpen(false);
   };
@@ -179,7 +243,8 @@ export default function CADocumentsScreen() {
   const activeFilterCount =
     (statusFilter !== 'ALL' ? 1 : 0) +
     (typeFilter !== 'ALL' ? 1 : 0) +
-    (dateRangeFilter !== 'ALL' ? 1 : 0);
+    (dateRangeFilter !== 'ALL' ? 1 : 0) +
+    (clientId ? 1 : 0);
 
   // Modal Handlers
   const handleClientCreated = async (payload) => {
@@ -220,11 +285,18 @@ export default function CADocumentsScreen() {
     showToast(settlement.message || 'Payment successfully verified.', 'success');
   };
 
+  const [dispatchingDocId, setDispatchingDocId] = useState(null);
+
   const handleDispatchLink = async (docId, options) => {
-    const res = await caDocumentsService.dispatchLink(docId, options);
-    showToast(res.message, 'success');
-    loadDocuments();
-    return res;
+    setDispatchingDocId(docId);
+    try {
+      const res = await caDocumentsService.dispatchLink(docId, options);
+      showToast(res.message, 'success');
+      loadDocuments();
+      return res;
+    } finally {
+      setDispatchingDocId(null);
+    }
   };
 
   const [downloadingDocId, setDownloadingDocId] = useState(null);
@@ -243,7 +315,120 @@ export default function CADocumentsScreen() {
     }
   };
 
-  // Status Badge Colors & Classifications
+  // Status Configuration for Distinct Icons & Color Tokens
+  const STATUS_CONFIG = {
+    draft: {
+      Icon: FileText,
+      label: 'Draft',
+      className: 'zd-status-icon-badge--slate',
+      color: '#475569'
+    },
+    awaiting_info: {
+      Icon: Clock,
+      label: 'Awaiting Info',
+      className: 'zd-status-icon-badge--amber',
+      color: '#d97706'
+    },
+    corrections: {
+      Icon: AlertTriangle,
+      label: 'Changes Requested',
+      className: 'zd-status-icon-badge--orange',
+      color: '#ea580c'
+    },
+    revised_review: {
+      Icon: RotateCcw,
+      label: 'Revised Draft',
+      className: 'zd-status-icon-badge--purple',
+      color: '#7c3aed'
+    },
+    party_review: {
+      Icon: Users,
+      label: 'Party Review',
+      className: 'zd-status-icon-badge--purple',
+      color: '#7c3aed'
+    },
+    ca_review: {
+      Icon: ShieldCheck,
+      label: 'CA Review',
+      className: 'zd-status-icon-badge--indigo',
+      color: '#4f46e5'
+    },
+    approved_locked: {
+      Icon: Lock,
+      label: 'Approved & Locked',
+      className: 'zd-status-icon-badge--blue',
+      color: '#2563eb'
+    },
+    awaiting_payment: {
+      Icon: CreditCard,
+      label: 'Awaiting Payment',
+      className: 'zd-status-icon-badge--pink',
+      color: '#db2777'
+    },
+    executing: {
+      Icon: Cpu,
+      label: 'Executing',
+      className: 'zd-status-icon-badge--cyan',
+      color: '#0891b2'
+    },
+    completed: {
+      Icon: CheckCircle2,
+      label: 'Completed',
+      className: 'zd-status-icon-badge--green',
+      color: '#16a34a'
+    }
+  };
+
+  const renderStatusIconBadge = (doc) => {
+    const config = STATUS_CONFIG[doc.statusCode] || {
+      Icon: FileText,
+      label: doc.status || 'Draft',
+      className: 'zd-status-icon-badge--blue',
+      color: '#2563eb'
+    };
+    const { Icon, label, className, color } = config;
+
+    const payStatus = doc.statusDetails?.paymentStatus || (doc.payment?.status === 'PAID' ? 'Paid' : 'Unbilled');
+    const stampStatus = doc.statusDetails?.stampStatus || (doc.statusCode === 'completed' || doc.statusCode === 'executing' ? 'eStamped' : 'Not Required');
+    const tooltipText = `Status: ${doc.status || label} • Payment: ${payStatus} • Stamp: ${stampStatus}`;
+
+    return (
+      <div className="zd-tooltip-wrap">
+        <div
+          tabIndex={0}
+          role="img"
+          className={`zd-status-icon-badge ${className}`}
+          aria-label={`Document status: ${doc.status || label}. Payment: ${payStatus}. Stamp: ${stampStatus}.`}
+          title={tooltipText}
+        >
+          <Icon size={18} color={color} aria-hidden="true" />
+        </div>
+        <span className="zd-tooltip-box zd-tooltip-box--wide" role="tooltip">
+          <strong>{doc.status || label}</strong>
+          <span className="zd-tooltip-sub">Pay: {payStatus} • Stamp: {stampStatus}</span>
+        </span>
+      </div>
+    );
+  };
+
+  // Status text display (Text Only — no icon, colored badge, background box or circular container)
+  const renderStatusText = (doc, isMobile = false) => {
+    const payStatus = doc.statusDetails?.paymentStatus || (doc.payment?.status === 'PAID' ? 'Paid' : 'Unbilled');
+    const stampStatus = doc.statusDetails?.stampStatus || (doc.statusCode === 'completed' || doc.statusCode === 'executing' ? 'eStamped' : 'Not Required');
+    const tooltipText = `Status: ${doc.status} • Pay: ${payStatus} • Stamp: ${stampStatus}`;
+
+    return (
+      <span
+        className={`zd-doc-status-text${isMobile ? ' zd-doc-status-text--mobile' : ''}`}
+        title={tooltipText}
+        aria-label={`Document status: ${doc.status}. Payment: ${payStatus}. Stamp: ${stampStatus}.`}
+      >
+        {doc.status}
+      </span>
+    );
+  };
+
+  // Status Badge Colors & Classifications (preserved for backward compatibility & mobile)
   const renderStatusBadge = (doc) => {
     let badgeClass = 'zd-doc-badge--blue';
     if (doc.statusCode === 'draft') badgeClass = 'zd-doc-badge--slate';
@@ -289,7 +474,7 @@ export default function CADocumentsScreen() {
         <div className="zd-docs-header-title-box">
           <h1 className="zd-docs-page-title">Documents</h1>
           <p className="zd-docs-page-sub">
-            Centralized document management and tracking vault for statutory audits, filings & legal deeds.
+            Manage drafts, reviews and completed documents
           </p>
         </div>
 
@@ -316,7 +501,7 @@ export default function CADocumentsScreen() {
             type="text"
             id="input-docs-search"
             className="zd-docs-search-input"
-            placeholder="Search by document title, reference ID, or client name…"
+            placeholder="Search by document title, reference ID, or client name..."
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
             aria-label="Search documents by title, reference ID, or client"
@@ -459,6 +644,27 @@ export default function CADocumentsScreen() {
         document.body
       )}
 
+      {/* Active Client Filter Banner */}
+      {clientId && (
+        <div className="zd-client-filter-banner" role="status" aria-live="polite">
+          <div className="zd-client-filter-content">
+            <span className="zd-client-filter-label">Filtered by Client:</span>
+            <strong className="zd-client-filter-name">{displayClientName}</strong>
+            <span className="zd-client-filter-id">ID: {clientId}</span>
+          </div>
+          <button
+            type="button"
+            className="zd-clear-client-filter-btn"
+            id="btn-clear-client-filter"
+            onClick={handleClearClientFilter}
+            aria-label="Clear client filter"
+          >
+            <X size={14} aria-hidden="true" />
+            <span>Clear client filter</span>
+          </button>
+        </div>
+      )}
+
       {/* Result Count and Quick Filter Summary */}
       <div className="zd-docs-summary-row">
         <span className="zd-docs-counter">
@@ -467,6 +673,18 @@ export default function CADocumentsScreen() {
 
         {activeFilterCount > 0 && (
           <div className="zd-active-filter-chips">
+            {clientId && (
+              <span className="zd-filter-chip zd-filter-chip--client">
+                Client: {displayClientName}
+                <button
+                  type="button"
+                  onClick={handleClearClientFilter}
+                  aria-label="Clear client filter"
+                >
+                  ×
+                </button>
+              </span>
+            )}
             {statusFilter !== 'ALL' && (
               <span className="zd-filter-chip">
                 Status: {statusFilter}
@@ -512,16 +730,40 @@ export default function CADocumentsScreen() {
           <div className="zd-docs-empty-state">
             <FileText size={40} color="#94a3b8" />
             <h3 className="zd-empty-title">
-              {searchQuery || activeFilterCount > 0
+              {clientId
+                ? 'No documents found for this client'
+                : searchQuery || activeFilterCount > 0
                 ? 'No matching documents found'
                 : 'No documents in practice vault'}
             </h3>
             <p className="zd-empty-sub">
-              {searchQuery || activeFilterCount > 0
+              {clientId
+                ? `No statutory or filing documents currently exist for ${displayClientName}.`
+                : searchQuery || activeFilterCount > 0
                 ? 'Try adjusting your search query or clearing status and type filters.'
                 : 'Click "Add Client" above to initialize your first document draft.'}
             </p>
-            {searchQuery || activeFilterCount > 0 ? (
+            {clientId ? (
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+                <button
+                  type="button"
+                  className="zd-btn-action zd-btn-action--secondary"
+                  id="btn-empty-clear-client-filter"
+                  onClick={handleClearClientFilter}
+                >
+                  <X size={14} />
+                  <span>Clear client filter</span>
+                </button>
+                <button
+                  type="button"
+                  className="zd-btn-action zd-btn-action--primary"
+                  onClick={() => setActiveModal('add_client')}
+                >
+                  <Plus size={14} aria-hidden="true" />
+                  <span>Add Client & Create Document</span>
+                </button>
+              </div>
+            ) : searchQuery || activeFilterCount > 0 ? (
               <button
                 type="button"
                 className="zd-btn-action zd-btn-action--secondary"
@@ -545,88 +787,69 @@ export default function CADocumentsScreen() {
           <>
             <div className="zd-docs-table-scroll-wrap">
               <table className="zd-docs-table" aria-label="CA Documents Practice Vault">
-              <thead>
-                <tr>
-                  <th scope="col" style={{ width: '24%' }}>Document Details</th>
-                  <th scope="col" style={{ width: '16%' }}>Client</th>
-                  <th scope="col" style={{ width: '11%' }}>Edit Inputs</th>
-                  <th scope="col" style={{ width: '12%' }}>Edit Request</th>
-                  <th scope="col" style={{ width: '12%' }}>Payment</th>
-                  <th scope="col" style={{ width: '12%' }}>Send Link</th>
-                  <th scope="col" style={{ width: '13%' }}>Document Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {documents.map((doc) => {
-                  const unresolvedRequests = (doc.correctionRequests || []).filter(
-                    (r) => r.status === 'Pending' || r.status === 'pending'
-                  );
-                  const hasRequests = unresolvedRequests.length > 0;
-                  const isEditable = doc.isEditableDraft;
-                  const isPaid = doc.payment?.status === 'PAID';
-                  const isApproved = Boolean(doc.clientApproval?.isApproved);
-                  const isCompleted = doc.statusCode === 'completed';
+                <colgroup>
+                  <col style={{ width: '28%' }} />
+                  <col style={{ width: '19%' }} />
+                  <col style={{ width: '7%' }} />
+                  <col style={{ width: '11%' }} />
+                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '7%' }} />
+                  <col style={{ width: '11%' }} />
+                  <col style={{ width: '9%' }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th scope="col" aria-label="Document Details">DOCUMENT DETAILS</th>
+                    <th scope="col" aria-label="Client">CLIENT</th>
+                    <th scope="col" className="zd-th-center" aria-label="Edit Inputs">EDIT</th>
+                    <th scope="col" className="zd-th-center" aria-label="Edit Request">REQUESTS</th>
+                    <th scope="col" className="zd-th-center" aria-label="Payment">PAYMENT</th>
+                    <th scope="col" className="zd-th-center" aria-label="Send Link">SEND LINK</th>
+                    <th scope="col" aria-label="Document Status">STATUS</th>
+                    <th scope="col" className="zd-th-center">QUICK ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {documents.map((doc) => {
+                    const unresolvedRequests = (doc.correctionRequests || []).filter(
+                      (r) => r.status === 'Pending' || r.status === 'pending'
+                    );
+                    const hasRequests = unresolvedRequests.length > 0;
+                    const isLocked = doc.statusCode === 'executing' || doc.statusCode === 'completed' || (!doc.isEditableDraft && doc.statusCode === 'approved_locked');
+                    const isEditable = !isLocked;
+                    const isPaid = doc.payment?.status === 'PAID';
+                    const isApproved = Boolean(doc.clientApproval?.isApproved);
+                    const isCompleted = doc.statusCode === 'completed';
 
-                  return (
-                    <tr key={doc.id} className="zd-doc-table-row">
-                      {/* Column 1: Document Details */}
-                      <td>
-                        <div className="zd-doc-details-cell">
-                          <button
-                            type="button"
-                            className="zd-doc-title-link"
-                            onClick={() => {
-                              setSelectedDoc(doc);
-                              if (isCompleted) {
-                                setActiveModal('completion');
-                              } else {
-                                setActiveModal('preview');
-                              }
-                            }}
-                            title="Click to preview document and filing history"
-                          >
-                            <FileText size={16} className="zd-doc-title-icon" aria-hidden="true" />
-                            <span>{doc.title}</span>
-                          </button>
-                          <div className="zd-doc-ref-line">
-                            <span className="zd-doc-ref-pill">Ref: {doc.ref}</span>
-                            <span className="zd-version-pill">{doc.version || 'v1'}</span>
-                            <span className="zd-sep">•</span>
-                            <span className="zd-doc-secondary-meta">
-                              {doc.docType} • Created {doc.createdAt}
-                            </span>
-                          </div>
-                          {isCompleted && (
-                            <div className="zd-doc-completed-quick-links">
-                              <button
-                                type="button"
-                                className="zd-doc-quick-link"
-                                onClick={() => {
-                                  setSelectedDoc(doc);
+                    return (
+                      <tr key={doc.id} className="zd-doc-table-row">
+                        {/* Column 1: Document Details */}
+                        <td>
+                          <div className="zd-doc-details-cell">
+                            <button
+                              type="button"
+                              className="zd-doc-title-link"
+                              onClick={() => {
+                                setSelectedDoc(doc);
+                                if (isCompleted) {
+                                  setActiveModal('completion');
+                                } else {
                                   setActiveModal('preview');
-                                }}
-                              >
-                                <Eye size={11} />
-                                <span>View Document</span>
-                              </button>
-                              <span className="zd-sep">•</span>
-                              <button
-                                type="button"
-                                className="zd-doc-quick-link"
-                                disabled={downloadingDocId === doc.id || doc.finalFileAvailable === false}
-                                onClick={() => handleDownloadExecuted(doc)}
-                              >
-                                <Download size={11} />
-                                <span>
-                                  {doc.finalFileAvailable === false
-                                    ? 'Final document processing'
-                                    : 'Download Document'}
-                                </span>
-                              </button>
+                                }
+                              }}
+                              title="Click to preview document and filing history"
+                            >
+                              <FileText size={16} className="zd-doc-file-icon" color="#2563eb" aria-hidden="true" />
+                              <span>{cleanDocDisplayTitle(doc.title)}</span>
+                            </button>
+                            <div className="zd-doc-ref-line">
+                              <span className="zd-doc-ref-text">Ref: {doc.ref}</span>
                             </div>
-                          )}
-                        </div>
-                      </td>
+                            <div className="zd-doc-secondary-meta">
+                              {doc.docType} • Created {doc.createdAt}
+                            </div>
+                          </div>
+                        </td>
 
                       {/* Column 2: Client */}
                       <td>
@@ -636,9 +859,9 @@ export default function CADocumentsScreen() {
                         </div>
                       </td>
 
-                      {/* Column 3: Edit Inputs */}
-                      <td>
-                        <div className="zd-doc-actions-cell">
+                      {/* Column 3: Edit */}
+                      <td className="zd-td-center">
+                        <div className="zd-doc-actions-cell zd-doc-actions-cell--center">
                           {isEditable ? (
                             <button
                               type="button"
@@ -647,10 +870,11 @@ export default function CADocumentsScreen() {
                                 setSelectedDoc(doc);
                                 setActiveModal('edit_inputs');
                               }}
+                              aria-label={`Edit inputs for ${cleanDocDisplayTitle(doc.title)}`}
                               title="Edit draft form inputs"
                             >
-                              <Edit3 size={13} aria-hidden="true" />
-                              <span>Edit Inputs</span>
+                              <Pencil size={12} aria-hidden="true" />
+                              <span>Edit</span>
                             </button>
                           ) : (
                             <button
@@ -660,18 +884,19 @@ export default function CADocumentsScreen() {
                                 setSelectedDoc(doc);
                                 setActiveModal('edit_inputs');
                               }}
+                              aria-label={`Revise locked document ${cleanDocDisplayTitle(doc.title)}`}
                               title="Document locked for review/signing; click to create a new draft revision"
                             >
                               <Lock size={12} aria-hidden="true" />
-                              <span>Revise (v2)</span>
+                              <span>Edit</span>
                             </button>
                           )}
                         </div>
                       </td>
 
-                      {/* Column 4: Edit Request */}
-                      <td>
-                        <div className="zd-doc-actions-cell">
+                      {/* Column 4: Requests */}
+                      <td className="zd-td-center">
+                        <div className="zd-doc-actions-cell zd-doc-actions-cell--center">
                           {hasRequests ? (
                             <button
                               type="button"
@@ -680,24 +905,24 @@ export default function CADocumentsScreen() {
                                 setSelectedDoc(doc);
                                 setActiveModal('edit_requests');
                               }}
-                              title="View client / reviewer requested changes"
+                              aria-label={`View ${unresolvedRequests.length} edit request${unresolvedRequests.length > 1 ? 's' : ''} for ${cleanDocDisplayTitle(doc.title)}`}
+                              title={`View ${unresolvedRequests.length} client requested change${unresolvedRequests.length > 1 ? 's' : ''}`}
                             >
-                              <MessageSquare size={13} aria-hidden="true" />
-                              <span>View Requests ({unresolvedRequests.length})</span>
+                              <span>Requests ({unresolvedRequests.length})</span>
                             </button>
                           ) : (
-                            <span className="zd-doc-no-requests">No requests</span>
+                            <span className="zd-table-dash" aria-hidden="true">—</span>
                           )}
                         </div>
                       </td>
 
                       {/* Column 5: Payment */}
-                      <td>
-                        <div className="zd-doc-actions-cell">
+                      <td className="zd-td-center">
+                        <div className="zd-doc-actions-cell zd-doc-actions-cell--center">
                           {isPaid ? (
-                            <button
-                              type="button"
-                              className="zd-btn-table-action zd-btn-table-action--paid"
+                            <span
+                              className="zd-doc-status-badge zd-doc-badge--green"
+                              style={{ cursor: 'pointer' }}
                               onClick={() => {
                                 setSelectedDoc(doc);
                                 setActiveModal('payment');
@@ -707,10 +932,14 @@ export default function CADocumentsScreen() {
                                   ? 'Payment settled and verified. Click to view invoice.'
                                   : 'Payment successful — awaiting final document approval.'
                               }
+                              aria-label={
+                                isApproved
+                                  ? `Payment settled for ${cleanDocDisplayTitle(doc.title)}. Click to view invoice.`
+                                  : `Payment received for ${cleanDocDisplayTitle(doc.title)}. Awaiting final document approval.`
+                              }
                             >
-                              <CheckCircle2 size={12} color="#16a34a" />
-                              <span>{isApproved ? 'Paid' : 'Paid (Awaiting Approval)'}</span>
-                            </button>
+                              <span>Paid</span>
+                            </span>
                           ) : (
                             <button
                               type="button"
@@ -719,102 +948,166 @@ export default function CADocumentsScreen() {
                                 setSelectedDoc(doc);
                                 setActiveModal('payment');
                               }}
-                              title="Click to pay statutory execution fee."
+                              aria-label={`Pay statutory execution fee for ${cleanDocDisplayTitle(doc.title)}`}
+                              title="Click to pay statutory execution fee"
                             >
-                              <CreditCard size={12} />
                               <span>Pay Fee</span>
                             </button>
                           )}
                         </div>
                       </td>
 
-                      {/* Column 6: Send Link / Completed CA Actions */}
-                      <td>
-                        <div className="zd-doc-actions-cell">
-                          {isCompleted ? (
-                            doc.finalFileAvailable === false ? (
-                              <span
-                                className="zd-processing-file-badge"
-                                title="The final certified original is currently being processed by the statutory repository."
+                      {/* Column 6: Send Link */}
+                      <td className="zd-td-center">
+                        <div className="zd-doc-actions-cell zd-doc-actions-cell--center">
+                          {dispatchingDocId === doc.id ? (
+                            <div className="zd-tooltip-wrap">
+                              <button
+                                type="button"
+                                disabled
+                                className="zd-btn-table-icon zd-btn-table-icon--disabled"
+                                aria-label="Dispatching signing invitation…"
                               >
-                                <Loader2 size={11} className="spinning" />
-                                <span>Final document processing</span>
+                                <Loader2 size={16} className="spinning" aria-hidden="true" />
+                              </button>
+                              <span className="zd-tooltip-box" role="tooltip">
+                                Dispatching invitation…
                               </span>
-                            ) : (
-                              <div style={{ display: 'flex', gap: 6 }}>
-                                <button
-                                  type="button"
-                                  className="zd-btn-table-action zd-btn-table-action--view"
-                                  onClick={() => {
-                                    setSelectedDoc(doc);
-                                    setActiveModal('preview');
-                                  }}
-                                  title="View final executed document"
-                                >
-                                  <Eye size={12} />
-                                  <span>View Document</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  className="zd-btn-table-action zd-btn-table-action--download"
-                                  onClick={() => handleDownloadExecuted(doc)}
-                                  disabled={downloadingDocId === doc.id}
-                                  title="Download certified executed PDF"
-                                >
-                                  {downloadingDocId === doc.id ? (
-                                    <Loader2 size={12} className="spinning" />
-                                  ) : (
-                                    <Download size={12} />
-                                  )}
-                                  <span>{downloadingDocId === doc.id ? 'Downloading…' : 'Download Document'}</span>
-                                </button>
-                              </div>
-                            )
+                            </div>
+                          ) : isCompleted ? (
+                            <span className="zd-table-dash" aria-hidden="true">—</span>
                           ) : !isPaid ? (
-                            <button
-                              type="button"
-                              disabled
-                              className="zd-btn-table-action zd-btn-table-action--disabled"
-                              title="Payment required before execution link can be generated."
-                            >
-                              <Send size={12} aria-hidden="true" />
-                              <span>Send Signing Link</span>
-                            </button>
+                            <div className="zd-tooltip-wrap">
+                              <button
+                                type="button"
+                                disabled
+                                className="zd-btn-table-icon zd-btn-table-icon--disabled"
+                                aria-label="Send signing link disabled (Payment required)"
+                                title="Payment required before signing link can be generated"
+                              >
+                                <Send size={16} aria-hidden="true" />
+                              </button>
+                              <span className="zd-tooltip-box" role="tooltip">
+                                Payment required before sending link
+                              </span>
+                            </div>
                           ) : !isApproved ? (
-                            <button
-                              type="button"
-                              disabled
-                              className="zd-btn-table-action zd-btn-table-action--disabled"
-                              title="Payment successful — awaiting final document approval before signing link can be dispatched."
-                            >
-                              <Send size={12} aria-hidden="true" />
-                              <span>Send Signing Link</span>
-                            </button>
-                          ) : doc.execution?.packetReady ? (
-                            <button
-                              type="button"
-                              className="zd-btn-table-action zd-btn-table-action--send"
-                              onClick={() => {
-                                setSelectedDoc(doc);
-                                setActiveModal('send_link');
-                              }}
-                              title="Dispatch execution and signing link to signatories"
-                            >
-                              <Send size={13} aria-hidden="true" />
-                              <span>Send Signing Link</span>
-                            </button>
+                            <div className="zd-tooltip-wrap">
+                              <button
+                                type="button"
+                                disabled
+                                className="zd-btn-table-icon zd-btn-table-icon--disabled"
+                                aria-label="Send signing link disabled (Awaiting document approval)"
+                                title="Payment successful — awaiting final document approval before signing link can be dispatched"
+                              >
+                                <Send size={16} aria-hidden="true" />
+                              </button>
+                              <span className="zd-tooltip-box" role="tooltip">
+                                Awaiting approval before sending link
+                              </span>
+                            </div>
+                          ) : !doc.execution?.packetReady ? (
+                            <div className="zd-tooltip-wrap">
+                              <button
+                                type="button"
+                                disabled
+                                className="zd-btn-table-icon zd-btn-table-icon--disabled"
+                                aria-label="Send signing link unavailable: Preparing execution packet and state stamping"
+                                title="Preparing execution packet and state stamping"
+                              >
+                                <Send size={16} aria-hidden="true" />
+                              </button>
+                              <span className="zd-tooltip-box" role="tooltip">
+                                Preparing execution packet…
+                              </span>
+                            </div>
                           ) : (
-                            <span className="zd-preparing-packet-badge" title="Preparing execution packet and state stamping">
-                              <Loader2 size={11} className="spinning" />
-                              <span>Preparing Packet</span>
-                            </span>
+                            <div className="zd-tooltip-wrap">
+                              <button
+                                type="button"
+                                className="zd-btn-table-icon zd-btn-table-icon--send"
+                                onClick={() => {
+                                  setSelectedDoc(doc);
+                                  setActiveModal('send_link');
+                                }}
+                                aria-label={`Dispatch execution and signing link for ${cleanDocDisplayTitle(doc.title)}`}
+                                title="Dispatch execution and signing link to signatories"
+                              >
+                                <Send size={16} aria-hidden="true" />
+                                <span className="sr-only">Send Signing Link</span>
+                              </button>
+                              <span className="zd-tooltip-box" role="tooltip">
+                                Send Signing Link
+                              </span>
+                            </div>
                           )}
                         </div>
                       </td>
 
-                      {/* Column 7: Document Status */}
+                      {/* Column 7: Status */}
                       <td>
-                        {renderStatusBadge(doc)}
+                        {renderStatusText(doc)}
+                      </td>
+
+                      {/* Column 8: Quick Actions */}
+                      <td className="zd-td-center">
+                        <div className="zd-doc-actions-cell zd-doc-actions-cell--center zd-quick-actions-cell">
+                          <div className="zd-tooltip-wrap">
+                            <button
+                              type="button"
+                              className="zd-btn-table-icon zd-btn-table-icon--view"
+                              onClick={() => {
+                                setSelectedDoc(doc);
+                                if (isCompleted) {
+                                  setActiveModal('completion');
+                                } else {
+                                  setActiveModal('preview');
+                                }
+                              }}
+                              aria-label={`View document preview for ${cleanDocDisplayTitle(doc.title)}`}
+                              title="View Document"
+                            >
+                              <Eye size={16} aria-hidden="true" />
+                              <span className="sr-only"><span>View Document</span></span>
+                            </button>
+                            <span className="zd-tooltip-box" role="tooltip">
+                              View Document
+                            </span>
+                          </div>
+
+                          {isCompleted && doc.finalFileAvailable !== false ? (
+                            <div className="zd-tooltip-wrap">
+                              <button
+                                type="button"
+                                className="zd-btn-table-icon zd-btn-table-icon--download"
+                                onClick={() => handleDownloadExecuted(doc)}
+                                disabled={downloadingDocId === doc.id}
+                                aria-label={`Download executed PDF for ${cleanDocDisplayTitle(doc.title)}`}
+                                title={
+                                  downloadingDocId === doc.id
+                                    ? 'Downloading executed document…'
+                                    : 'Download Document'
+                                }
+                              >
+                                {downloadingDocId === doc.id ? (
+                                  <Loader2 size={16} className="spinning" aria-hidden="true" />
+                                ) : (
+                                  <Download size={16} aria-hidden="true" />
+                                )}
+                                <span className="sr-only"><span>Download Document</span></span>
+                              </button>
+                              <span className="zd-tooltip-box" role="tooltip">
+                                {downloadingDocId === doc.id ? 'Downloading…' : 'Download Document'}
+                              </span>
+                            </div>
+                          ) : (
+                            <span
+                              className="zd-quick-actions-blur-slot"
+                              aria-hidden="true"
+                              title={doc.finalFileAvailable === false ? 'Final document processing' : 'Download unavailable'}
+                            />
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -830,152 +1123,185 @@ export default function CADocumentsScreen() {
                 (r) => r.status === 'Pending' || r.status === 'pending'
               );
               const hasRequests = unresolvedRequests.length > 0;
-              const isEditable = doc.isEditableDraft;
+              const isLocked = doc.statusCode === 'executing' || doc.statusCode === 'completed' || (!doc.isEditableDraft && doc.statusCode === 'approved_locked');
+              const isEditable = !isLocked;
               const isPaid = doc.payment?.status === 'PAID';
               const isApproved = Boolean(doc.clientApproval?.isApproved);
               const isCompleted = doc.statusCode === 'completed';
+              const isExecutingOrReady = (doc.statusCode === 'executing' || doc.execution?.packetReady) && isPaid && isApproved;
+              const sendDisabledReason = !isPaid
+                ? 'Payment is required before sending the signing link'
+                : !isApproved
+                ? 'Draft approval is required before sending the signing link'
+                : 'Execution packet is still preparing';
 
               return (
                 <div key={doc.id} className="ca-mobile-doc-card">
                   <div className="ca-mobile-doc-top">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <div className="ca-mobile-ref-group">
+                      <span className="ca-mobile-label">Reference</span>
                       <span className="ca-mobile-ref">Ref: {doc.ref}</span>
-                      <span className="zd-version-pill">{doc.version || 'v1'}</span>
                     </div>
-                    {renderStatusBadge(doc)}
+                    <div className="ca-mobile-status-group">
+                      <span className="ca-mobile-label">Status</span>
+                      {renderStatusText(doc, true)}
+                    </div>
                   </div>
 
-                  <button
-                    type="button"
-                    className="zd-doc-title-link"
-                    style={{ fontSize: 14.5, fontWeight: 700 }}
-                    onClick={() => {
-                      setSelectedDoc(doc);
-                      if (isCompleted) {
-                        setActiveModal('completion');
-                      } else {
-                        setActiveModal('preview');
-                      }
-                    }}
-                  >
-                    <FileText size={16} className="zd-doc-title-icon" aria-hidden="true" />
-                    <span>{doc.title}</span>
-                  </button>
-
-                  <div className="ca-mobile-meta">
-                    <strong>Client:</strong> {doc.client} <span style={{ color: '#64748b' }}>({doc.clientType})</span>
+                  <div className="ca-mobile-field-group">
+                    <span className="ca-mobile-label">Document Details</span>
+                    <button
+                      type="button"
+                      className="zd-doc-title-link"
+                      style={{ fontSize: 14.5, fontWeight: 700 }}
+                      onClick={() => {
+                        setSelectedDoc(doc);
+                        if (isCompleted) {
+                          setActiveModal('completion');
+                        } else {
+                          setActiveModal('preview');
+                        }
+                      }}
+                      title="Click to preview document and filing history"
+                    >
+                      <FileText size={16} className="zd-doc-title-icon" aria-hidden="true" />
+                      <span>{cleanDocDisplayTitle(doc.title)}</span>
+                    </button>
+                    <div className="ca-mobile-subtags">
+                      {doc.docType} • Created {doc.createdAt}
+                    </div>
                   </div>
 
-                  <div className="ca-mobile-subtags">
-                    {doc.docType} • Created {doc.createdAt}
+                  <div className="ca-mobile-field-group">
+                    <span className="ca-mobile-label">Client</span>
+                    <div className="ca-mobile-client-val">
+                      <strong>{doc.client}</strong> <span style={{ color: '#64748b' }}>({doc.clientType})</span>
+                    </div>
                   </div>
 
-                  {/* Quick Action Buttons Grid */}
-                  <div className="ca-mobile-actions-grid">
-                    {isEditable ? (
-                      <button
-                        type="button"
-                        className="zd-btn-table-action zd-btn-table-action--edit"
-                        onClick={() => {
-                          setSelectedDoc(doc);
-                          setActiveModal('edit_inputs');
-                        }}
-                      >
-                        <Edit3 size={13} />
-                        <span>Edit Inputs</span>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="zd-btn-table-action zd-btn-table-action--locked"
-                        onClick={() => {
-                          setSelectedDoc(doc);
-                          setActiveModal('edit_inputs');
-                        }}
-                      >
-                        <Lock size={12} />
-                        <span>Revise (v2)</span>
-                      </button>
-                    )}
-
-                    {hasRequests && (
-                      <button
-                        type="button"
-                        className="zd-btn-table-action zd-btn-table-action--requests"
-                        onClick={() => {
-                          setSelectedDoc(doc);
-                          setActiveModal('edit_requests');
-                        }}
-                      >
-                        <MessageSquare size={13} />
-                        <span>Requests ({unresolvedRequests.length})</span>
-                      </button>
-                    )}
-
-                    {isPaid ? (
-                      <button
-                        type="button"
-                        className="zd-btn-table-action zd-btn-table-action--paid"
-                        onClick={() => {
-                          setSelectedDoc(doc);
-                          setActiveModal('payment');
-                        }}
-                      >
-                        <CheckCircle2 size={12} color="#16a34a" />
-                        <span>{isApproved ? 'Paid' : 'Paid (Awaiting Appr.)'}</span>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="zd-btn-table-action zd-btn-table-action--pay"
-                        onClick={() => {
-                          setSelectedDoc(doc);
-                          setActiveModal('payment');
-                        }}
-                      >
-                        <CreditCard size={12} />
-                        <span>Pay Fee</span>
-                      </button>
-                    )}
-
-                    {isCompleted ? (
-                      <div style={{ display: 'flex', gap: 8, width: '100%', marginTop: 4 }}>
+                  {/* Actions Section */}
+                  <div className="ca-mobile-actions-section">
+                    <span className="ca-mobile-label">Actions</span>
+                    <div className="ca-mobile-actions-grid">
+                      {isEditable ? (
                         <button
                           type="button"
-                          className="zd-btn-table-action zd-btn-table-action--view"
-                          style={{ flex: 1, justifyContent: 'center' }}
+                          className="zd-btn-table-action zd-btn-table-action--edit"
                           onClick={() => {
                             setSelectedDoc(doc);
-                            setActiveModal('preview');
+                            setActiveModal('edit_inputs');
                           }}
                         >
-                          <Eye size={12} />
-                          <span>View Document</span>
+                          <Edit3 size={13} aria-hidden="true" />
+                          <span>Edit</span>
                         </button>
+                      ) : (
                         <button
                           type="button"
-                          className="zd-btn-table-action zd-btn-table-action--download"
-                          style={{ flex: 1, justifyContent: 'center' }}
-                          onClick={() => handleDownloadExecuted(doc)}
-                          disabled={downloadingDocId === doc.id || doc.finalFileAvailable === false}
+                          className="zd-btn-table-action zd-btn-table-action--locked"
+                          onClick={() => {
+                            setSelectedDoc(doc);
+                            setActiveModal('edit_inputs');
+                          }}
                         >
-                          <Download size={12} />
-                          <span>{downloadingDocId === doc.id ? 'Downloading…' : 'Download Document'}</span>
+                          <Lock size={12} aria-hidden="true" />
+                          <span>Edit</span>
                         </button>
-                      </div>
-                    ) : doc.execution?.packetReady && isPaid && isApproved ? (
-                      <button
-                        type="button"
-                        className="zd-btn-table-action zd-btn-table-action--send"
-                        onClick={() => {
-                          setSelectedDoc(doc);
-                          setActiveModal('send_link');
-                        }}
-                      >
-                        <Send size={13} />
-                        <span>Send Signing Link</span>
-                      </button>
-                    ) : null}
+                      )}
+
+                      {hasRequests && (
+                        <button
+                          type="button"
+                          className="zd-btn-table-action zd-btn-table-action--requests"
+                          onClick={() => {
+                            setSelectedDoc(doc);
+                            setActiveModal('edit_requests');
+                          }}
+                        >
+                          <MessageSquare size={13} aria-hidden="true" />
+                          <span>Requests ({unresolvedRequests.length})</span>
+                        </button>
+                      )}
+
+                      {isPaid ? (
+                        <button
+                          type="button"
+                          className="zd-btn-table-action zd-btn-table-action--paid"
+                          onClick={() => {
+                            setSelectedDoc(doc);
+                            setActiveModal('payment');
+                          }}
+                        >
+                          <CheckCircle2 size={12} color="#16a34a" aria-hidden="true" />
+                          <span>{isApproved ? 'Paid' : 'Paid (Awaiting Appr.)'}</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="zd-btn-table-action zd-btn-table-action--pay"
+                          onClick={() => {
+                            setSelectedDoc(doc);
+                            setActiveModal('payment');
+                          }}
+                        >
+                          <CreditCard size={12} aria-hidden="true" />
+                          <span>Pay Fee</span>
+                        </button>
+                      )}
+
+                      {isCompleted ? (
+                        <div style={{ display: 'flex', gap: 8, width: '100%', marginTop: 4 }}>
+                          <button
+                            type="button"
+                            className="zd-btn-table-action zd-btn-table-action--view"
+                            style={{ flex: 1, justifyContent: 'center' }}
+                            onClick={() => {
+                              setSelectedDoc(doc);
+                              setActiveModal('preview');
+                            }}
+                          >
+                            <Eye size={12} aria-hidden="true" />
+                            <span>View Document</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="zd-btn-table-action zd-btn-table-action--download"
+                            style={{ flex: 1, justifyContent: 'center' }}
+                            onClick={() => handleDownloadExecuted(doc)}
+                            disabled={downloadingDocId === doc.id || doc.finalFileAvailable === false}
+                          >
+                            <Download size={12} aria-hidden="true" />
+                            <span>{downloadingDocId === doc.id ? 'Downloading…' : 'Download Document'}</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className={`zd-btn-table-action zd-btn-table-action--send ${
+                            isExecutingOrReady ? '' : 'zd-btn-table-icon--disabled'
+                          }`}
+                          onClick={() => {
+                            if (isExecutingOrReady) {
+                              setSelectedDoc(doc);
+                              setActiveModal('send_link');
+                            }
+                          }}
+                          disabled={!isExecutingOrReady || dispatchingDocId === doc.id}
+                          title={
+                            isExecutingOrReady
+                              ? 'Send signing link to client'
+                              : `Send link disabled: ${sendDisabledReason}`
+                          }
+                        >
+                          {dispatchingDocId === doc.id ? (
+                            <RefreshCw size={13} className="zd-spin" aria-hidden="true" />
+                          ) : (
+                            <Send size={13} aria-hidden="true" />
+                          )}
+                          <span>Send Signing Link</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -985,35 +1311,16 @@ export default function CADocumentsScreen() {
       )}
 
         {/* Pagination Footer */}
-        {!loading && documents.length > 0 && (
-          <div className="zd-docs-pagination-footer">
-            <span className="zd-pagination-info">
-              Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong>
-            </span>
-
-            <div className="zd-pagination-controls">
-              <button
-                type="button"
-                className="zd-pagination-btn"
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                aria-label="Previous page"
-              >
-                <ChevronLeft size={16} />
-                <span>Previous</span>
-              </button>
-              <button
-                type="button"
-                className="zd-pagination-btn"
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                aria-label="Next page"
-              >
-                <span>Next</span>
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
+        {!loading && (
+          <TablePagination
+            currentPage={currentPage}
+            pageSize={pageSize}
+            totalItems={totalRecords}
+            totalPages={totalPages}
+            itemName="documents"
+            onPageChange={(p) => setCurrentPage(p)}
+            loading={loading}
+          />
         )}
       </div>
 

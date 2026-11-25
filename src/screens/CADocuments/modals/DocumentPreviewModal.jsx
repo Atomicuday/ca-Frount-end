@@ -47,6 +47,17 @@ export default function DocumentPreviewModal({ isOpen, onClose, document }) {
     };
   }, [isOpen, document, isCompleted]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen || !document) return null;
 
   const handleDownload = async () => {
@@ -66,7 +77,7 @@ export default function DocumentPreviewModal({ isOpen, onClose, document }) {
 
   return (
     <div className="zd-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="doc-details-title">
-      <div className="zd-modal-card zd-glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 660 }}>
+      <div className="zd-modal-card zd-glass-card zd-preview-modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="zd-modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div className={`zd-modal-icon-badge ${isCompleted ? 'zd-modal-icon-badge--green' : ''}`}>

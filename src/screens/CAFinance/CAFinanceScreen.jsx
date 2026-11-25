@@ -4,13 +4,15 @@ import {
   Plus,
   Search,
   Calendar,
-  Clock,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  FileText
+  FileText,
+  RefreshCw,
+  Clock,
+  AlertCircle
 } from 'lucide-react';
-import { caBillingService, formatINR } from '../../services/api/caBillingService.js';
+import { caBillingService, formatINR, getCurrentFinancialYear } from '../../services/api/caBillingService.js';
 import AddMoneyModal from './modals/AddMoneyModal.jsx';
 import TransactionDetailsModal from './modals/TransactionDetailsModal.jsx';
 import './CAFinance.css';
@@ -19,6 +21,7 @@ export default function CAFinanceScreen() {
   // Wallet State
   const [wallet, setWallet] = useState(null);
   const [walletLoading, setWalletLoading] = useState(true);
+  const [walletError, setWalletError] = useState('');
 
   // Spending Summary State
   const [spendingPeriod, setSpendingPeriod] = useState('current_fy'); // 'this_month' | 'last_30d' | 'current_fy' | 'all_time'
@@ -30,6 +33,7 @@ export default function CAFinanceScreen() {
   const [transactionsLoading, setTransactionsLoading] = useState(true);
   const [totalTransactions, setTotalTransactions] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
+  const [reconcilingTxnId, setReconcilingTxnId] = useState(null);
   const pageSize = 6;
 
   // Filters State
@@ -57,10 +61,12 @@ export default function CAFinanceScreen() {
   const loadWallet = useCallback(async () => {
     try {
       setWalletLoading(true);
+      setWalletError('');
       const data = await caBillingService.getWalletBalance();
       setWallet(data);
     } catch (err) {
       console.error('Failed to load CA wallet:', err);
+      setWalletError(err.message || 'Unable to load wallet balance.');
       showToast('Unable to load wallet balance. Showing cached figures.', 'error');
     } finally {
       setWalletLoading(false);
@@ -135,19 +141,27 @@ export default function CAFinanceScreen() {
     showToast(message || `Wallet credited with ${formatINR(newTxn.amountPaise)}.`, 'success');
   };
 
-  // View Wallet History scroll action
-  const handleScrollToHistory = () => {
-    setTypeFilter('TOPUP');
-    setCurrentPage(1);
-    if (transactionsSectionRef.current) {
-      transactionsSectionRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
-
   // Open Details Modal
   const handleOpenDetails = (txn) => {
     setSelectedTxn(txn);
     setIsDetailsOpen(true);
+  };
+
+  // Live Gateway Reconciliation for Pending Transactions
+  const handleCheckStatus = async (txnId) => {
+    try {
+      setReconcilingTxnId(txnId);
+      const res = await caBillingService.checkPaymentStatus(txnId);
+      showToast(res.message || 'Payment status updated.', 'success');
+      loadWallet();
+      loadTransactions();
+      loadSpending(spendingPeriod);
+    } catch (err) {
+      console.error('Failed to check payment status:', err);
+      showToast(err.message || 'Unable to check status.', 'error');
+    } finally {
+      setReconcilingTxnId(null);
+    }
   };
 
   const totalPages = Math.ceil(totalTransactions / pageSize) || 1;
@@ -165,9 +179,9 @@ export default function CAFinanceScreen() {
       {/* 1. PAGE HEADER */}
       <div className="ca-page-header">
         <div className="ca-page-title-wrap">
-          <h1 className="ca-page-title">Wallet & Billing</h1>
+          <h1 className="ca-page-title">Zap Wallet</h1>
           <p className="ca-page-subtitle">
-            Manage your wallet, service charges and payment history.
+            Manage your Zap Wallet, service charges and payment history.
           </p>
         </div>
         <div className="ca-page-actions">
@@ -198,6 +212,16 @@ export default function CAFinanceScreen() {
                 {wallet?.firmName || 'R. Sharma & Associates'}
               </span>
             </div>
+            <button
+              type="button"
+              className="ca-wallet-refresh-btn"
+              onClick={loadWallet}
+              disabled={walletLoading}
+              title="Refresh available wallet balance"
+              aria-label="Refresh available wallet balance"
+            >
+              <RefreshCw size={14} className={walletLoading ? 'spinning' : ''} />
+            </button>
           </div>
 
           <div className="ca-wallet-balance-group">
@@ -205,50 +229,45 @@ export default function CAFinanceScreen() {
             <div className="ca-wallet-balance-val">
               {walletLoading ? (
                 <span style={{ fontSize: 24, color: '#94a3b8' }}>Loading balance…</span>
+              ) : walletError ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 20, color: '#dc2626' }}>Balance unavailable</span>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    style={{ fontSize: 12, padding: '3px 10px' }}
+                    onClick={loadWallet}
+                  >
+                    Retry
+                  </button>
+                </div>
               ) : (
                 formatINR(wallet?.availableBalancePaise || 0)
               )}
             </div>
-            <p className="ca-wallet-explanation">
-              Use your balance to pay for eligible document services.
-            </p>
-          </div>
-        </div>
-
-        {/* Wallet Right Section: Reserved Balance & Quick Actions */}
-        <div className="ca-wallet-hero-side">
-          <div className="ca-wallet-reserved-box">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Clock size={14} color="#64748b" />
-              <span className="ca-reserved-label">Reserved Amount:</span>
+            <div className="ca-wallet-sub-meta-row">
+              <p className="ca-wallet-explanation">
+                Use your balance to pay for eligible document services.
+              </p>
+              {wallet?.lastReconciledAt && !walletLoading && !walletError && (
+                <span className="ca-wallet-reconciled-time">
+                  <Clock size={12} />
+                  <span>
+                    Last updated:{' '}
+                    {new Date(wallet.lastReconciledAt).toLocaleDateString('en-IN', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric'
+                    })}{' '}
+                    at{' '}
+                    {new Date(wallet.lastReconciledAt).toLocaleTimeString('en-IN', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </span>
+                </span>
+              )}
             </div>
-            <strong className="ca-reserved-value">
-              {formatINR(wallet?.reservedBalancePaise || 0)}
-            </strong>
-            <span className="ca-reserved-sub">
-              Held for in-flight statutory eSign & eStamp handshakes
-            </span>
-          </div>
-
-          <div className="ca-wallet-actions-row">
-            <button
-              type="button"
-              className="zd-btn-action zd-btn-action--primary"
-              id="btn-open-add-money"
-              onClick={() => setIsAddMoneyOpen(true)}
-            >
-              <Plus size={15} />
-              <span>Add Money</span>
-            </button>
-            <button
-              type="button"
-              className="zd-btn-action zd-btn-action--secondary"
-              id="btn-view-wallet-history"
-              onClick={handleScrollToHistory}
-            >
-              <Clock size={14} />
-              <span>View Wallet History</span>
-            </button>
           </div>
         </div>
       </div>
@@ -275,9 +294,9 @@ export default function CAFinanceScreen() {
               onChange={(e) => setSpendingPeriod(e.target.value)}
               aria-label="Select spending reporting period"
             >
-              <option value="this_month">This Month (Nov 2026)</option>
+              <option value="this_month">This Month</option>
               <option value="last_30d">Last 30 Days</option>
-              <option value="current_fy">Current FY (2025-26)</option>
+              <option value="current_fy">Current {getCurrentFinancialYear()}</option>
               <option value="all_time">All Time</option>
             </select>
           </div>
@@ -292,11 +311,12 @@ export default function CAFinanceScreen() {
               {spendingLoading ? '—' : formatINR(spendingSummary?.totalSpendPaise || 0)}
             </strong>
             <span className="ca-spend-meta">
-              Excludes wallet top-ups (credits).
-              {spendingSummary?.refundsPaise > 0 && (
+              {spendingSummary?.refundsPaise > 0 ? (
                 <span className="ca-refund-tag">
-                  {formatINR(spendingSummary.refundsPaise)} refunded
+                  Net Spend: {formatINR(spendingSummary.netSpendPaise)} ({formatINR(spendingSummary.refundsPaise)} refunded)
                 </span>
+              ) : (
+                'Excludes wallet top-ups (credits). Includes all platform service fees.'
               )}
             </span>
           </div>
@@ -401,7 +421,10 @@ export default function CAFinanceScreen() {
             >
               <option value="ALL">All Statuses</option>
               <option value="SETTLED">Settled</option>
+              <option value="PENDING">Pending</option>
               <option value="FAILED">Failed</option>
+              <option value="CANCELLED">Cancelled</option>
+              <option value="REFUNDED">Refunded</option>
             </select>
 
             {(searchTerm || serviceFilter !== 'ALL' || typeFilter !== 'ALL' || statusFilter !== 'ALL') && (
@@ -527,28 +550,66 @@ export default function CAFinanceScreen() {
                           className={`badge ${
                             txn.status === 'SETTLED'
                               ? 'badge-success'
+                              : txn.status === 'PENDING'
+                              ? 'badge-warning'
                               : txn.status === 'FAILED'
                               ? 'badge-danger'
-                              : 'badge-warning'
+                              : txn.status === 'CANCELLED'
+                              ? 'badge-secondary'
+                              : 'badge-info'
                           }`}
                         >
-                          {txn.status === 'SETTLED' ? 'Settled' : txn.status}
+                          {txn.status === 'SETTLED'
+                            ? 'Settled'
+                            : txn.status === 'PENDING'
+                            ? 'Pending'
+                            : txn.status === 'FAILED'
+                            ? 'Failed'
+                            : txn.status === 'CANCELLED'
+                            ? 'Cancelled'
+                            : txn.status}
                         </span>
                       </td>
 
                       {/* Receipt / Details Action */}
                       <td style={{ textAlign: 'right' }}>
-                        <button
-                          type="button"
-                          className="btn btn-outline"
-                          id={`btn-view-txn-${txn.id}`}
-                          onClick={() => handleOpenDetails(txn)}
-                          style={{ fontSize: 12, padding: '4px 10px' }}
-                          title={`View receipt and breakdown for ${txn.id}`}
-                        >
-                          <FileText size={12} />
-                          <span>Receipt</span>
-                        </button>
+                        {txn.status === 'PENDING' ? (
+                          <button
+                            type="button"
+                            className="btn btn-outline"
+                            id={`btn-check-status-${txn.id}`}
+                            onClick={() => handleCheckStatus(txn.id)}
+                            disabled={reconcilingTxnId === txn.id}
+                            style={{ fontSize: 12, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                            title="Check payment status with gateway"
+                          >
+                            <RefreshCw size={12} className={reconcilingTxnId === txn.id ? 'spinning' : ''} />
+                            <span>{reconcilingTxnId === txn.id ? 'Checking…' : 'Check Status'}</span>
+                          </button>
+                        ) : txn.receiptId && txn.status === 'SETTLED' ? (
+                          <button
+                            type="button"
+                            className="btn btn-outline"
+                            id={`btn-view-txn-${txn.id}`}
+                            onClick={() => handleOpenDetails(txn)}
+                            style={{ fontSize: 12, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                            title={`View official receipt and breakdown for ${txn.id}`}
+                          >
+                            <FileText size={12} />
+                            <span>Receipt</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn-outline"
+                            id={`btn-view-txn-${txn.id}`}
+                            onClick={() => handleOpenDetails(txn)}
+                            style={{ fontSize: 12, padding: '4px 10px' }}
+                            title={`View transaction details for ${txn.id}`}
+                          >
+                            <span>Details</span>
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -585,12 +646,24 @@ export default function CAFinanceScreen() {
                         className={`badge ${
                           txn.status === 'SETTLED'
                             ? 'badge-success'
+                            : txn.status === 'PENDING'
+                            ? 'badge-warning'
                             : txn.status === 'FAILED'
                             ? 'badge-danger'
-                            : 'badge-warning'
+                            : txn.status === 'CANCELLED'
+                            ? 'badge-secondary'
+                            : 'badge-info'
                         }`}
                       >
-                        {txn.status === 'SETTLED' ? 'Settled' : txn.status}
+                        {txn.status === 'SETTLED'
+                          ? 'Settled'
+                          : txn.status === 'PENDING'
+                          ? 'Pending'
+                          : txn.status === 'FAILED'
+                          ? 'Failed'
+                          : txn.status === 'CANCELLED'
+                          ? 'Cancelled'
+                          : txn.status}
                       </span>
                     </div>
 
@@ -616,17 +689,43 @@ export default function CAFinanceScreen() {
                         <div style={{ fontSize: 11, color: '#64748b' }}>{txn.paymentSource}</div>
                       </div>
 
-                      <button
-                        type="button"
-                        className="btn btn-outline"
-                        id={`btn-view-txn-mobile-${txn.id}`}
-                        onClick={() => handleOpenDetails(txn)}
-                        style={{ fontSize: 12, padding: '6px 12px', minHeight: 38 }}
-                        title={`View receipt and breakdown for ${txn.id}`}
-                      >
-                        <FileText size={12} />
-                        <span>Receipt</span>
-                      </button>
+                      {txn.status === 'PENDING' ? (
+                        <button
+                          type="button"
+                          className="btn btn-outline"
+                          id={`btn-check-status-mobile-${txn.id}`}
+                          onClick={() => handleCheckStatus(txn.id)}
+                          disabled={reconcilingTxnId === txn.id}
+                          style={{ fontSize: 12, padding: '6px 12px', minHeight: 38, display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                          title="Check payment status with gateway"
+                        >
+                          <RefreshCw size={12} className={reconcilingTxnId === txn.id ? 'spinning' : ''} />
+                          <span>{reconcilingTxnId === txn.id ? 'Checking…' : 'Check Status'}</span>
+                        </button>
+                      ) : txn.receiptId && txn.status === 'SETTLED' ? (
+                        <button
+                          type="button"
+                          className="btn btn-outline"
+                          id={`btn-view-txn-mobile-${txn.id}`}
+                          onClick={() => handleOpenDetails(txn)}
+                          style={{ fontSize: 12, padding: '6px 12px', minHeight: 38, display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                          title={`View official receipt and breakdown for ${txn.id}`}
+                        >
+                          <FileText size={12} />
+                          <span>Receipt</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-outline"
+                          id={`btn-view-txn-mobile-${txn.id}`}
+                          onClick={() => handleOpenDetails(txn)}
+                          style={{ fontSize: 12, padding: '6px 12px', minHeight: 38 }}
+                          title={`View details for ${txn.id}`}
+                        >
+                          <span>Details</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -684,6 +783,13 @@ export default function CAFinanceScreen() {
           setSelectedTxn(null);
         }}
         transaction={selectedTxn}
+        onStatusReconciled={(updated) => {
+          setSelectedTxn(updated);
+          loadWallet();
+          loadTransactions();
+          loadSpending(spendingPeriod);
+        }}
+        onRetryTopUp={() => setIsAddMoneyOpen(true)}
       />
     </div>
   );

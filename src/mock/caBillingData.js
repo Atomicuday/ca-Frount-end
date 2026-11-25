@@ -6,17 +6,46 @@
 
 export const INITIAL_WALLET_STATE = {
   accountNumber: 'ZD-WAL-56291',
+  firmId: 'FIRM-014229S',
   firmName: 'R. Sharma & Associates',
   caName: 'CA Rajesh Sharma, FCA',
   availableBalancePaise: 845000, // ₹8,450.00
   reservedBalancePaise: 120000,  // ₹1,200.00 (held for in-flight eSign & eStamp executions)
   currency: 'INR',
+  minLimitPaise: 10000,          // Min top-up: ₹100
+  maxLimitPaise: 10000000,       // Max top-up: ₹1,00,000
   isDemoState: true,
   provider: 'ZapDocs PayGateway (Razorpay / Cashfree Certified Partner)',
-  lastReconciledAt: '2026-11-23T12:00:00Z'
+  lastReconciledAt: '2026-11-24T16:30:00Z'
+};
+
+export const WALLET_LIMITS = {
+  minPaise: 10000,
+  maxPaise: 10000000,
+  minRupees: 100,
+  maxRupees: 100000
 };
 
 export const INITIAL_BILLING_TRANSACTIONS = [
+  {
+    id: 'TXN-ZD-88450',
+    date: '2026-11-24T10:15:00Z',
+    description: 'Wallet Top-up (Awaiting Gateway Confirmation)',
+    docRef: null,
+    type: 'TOPUP',
+    amountPaise: 100000, // ₹1,000.00
+    paymentSource: 'UPI (Awaiting Gateway)',
+    status: 'PENDING',
+    providerRef: 'UPI-PEND-88450',
+    serviceCategory: 'TOPUP',
+    breakdown: {
+      basePaise: 100000,
+      gstPaise: 0,
+      stampDutyPaise: 0
+    },
+    receiptId: null,
+    recoveryAction: 'check_status'
+  },
   {
     id: 'TXN-ZD-88421',
     date: '2026-11-21T16:30:00Z',
@@ -126,6 +155,25 @@ export const INITIAL_BILLING_TRANSACTIONS = [
     receiptId: 'ZD-INV-2026-8876'
   },
   {
+    id: 'TXN-ZD-88210',
+    date: '2026-11-08T14:10:00Z',
+    description: 'Wallet Top-up (Cancelled by CA)',
+    docRef: null,
+    type: 'TOPUP',
+    amountPaise: 200000,
+    paymentSource: 'Net Banking (User Cancelled)',
+    status: 'CANCELLED',
+    providerRef: 'CANC-ORD-88210',
+    serviceCategory: 'TOPUP',
+    breakdown: {
+      basePaise: 200000,
+      gstPaise: 0,
+      stampDutyPaise: 0
+    },
+    receiptId: null,
+    failureReason: 'Top-up order was cancelled by user prior to gateway authorization.'
+  },
+  {
     id: 'TXN-ZD-88190',
     date: '2026-11-05T10:00:00Z',
     description: 'Wallet Top-up',
@@ -195,7 +243,8 @@ export const INITIAL_BILLING_TRANSACTIONS = [
       gstPaise: 0,
       stampDutyPaise: 0
     },
-    receiptId: null
+    receiptId: null,
+    failureReason: 'Bank gateway timeout during second-factor authorization.'
   }
 ];
 

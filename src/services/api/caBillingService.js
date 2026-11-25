@@ -14,13 +14,27 @@ import {
   INITIAL_WALLET_STATE,
   INITIAL_BILLING_TRANSACTIONS,
   PAYMENT_METHODS,
-  SUGGESTED_TOPUP_AMOUNTS
+  SUGGESTED_TOPUP_AMOUNTS,
+  WALLET_LIMITS
 } from '../../mock/caBillingData.js';
 
 let walletStore = { ...INITIAL_WALLET_STATE };
 let transactionsStore = [...INITIAL_BILLING_TRANSACTIONS];
 let settledOrderIds = new Set();
 let pendingOrdersStore = new Map();
+
+/**
+ * Calculate Indian Financial Year (April 1 – March 31).
+ * E.g., Nov 2026 -> 'FY 2026-27', Jan 2026 -> 'FY 2025-26'.
+ */
+export function getCurrentFinancialYear(date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date);
+  const year = d.getFullYear();
+  const month = d.getMonth(); // 0-based: 3 is April
+  const startYear = month >= 3 ? year : year - 1;
+  const endYearShort = (startYear + 1).toString().slice(-2);
+  return `FY ${startYear}-${endYearShort}`;
+}
 
 /**
  * Format integer paise into standard Indian Rupee string (e.g. ₹1,250.00).
@@ -38,9 +52,22 @@ export function formatINR(paise, showDecimals = true) {
 
 export const caBillingService = {
   /**
+   * Authorize firm access. Rejects unauthorized firm IDs to ensure tenant isolation.
+   */
+  assertFirmAuthorization: (firmId) => {
+    if (firmId && firmId !== walletStore.firmId && firmId !== 'FIRM-014229S') {
+      throw new Error('Unauthorized access: Cannot access wallet belonging to another firm.');
+    }
+    return true;
+  },
+
+  /**
    * Get wallet balance and reservation metadata.
    */
-  getWalletBalance: async () => {
+  getWalletBalance: async (firmId = null) => {
+    if (firmId) {
+      caBillingService.assertFirmAuthorization(firmId);
+    }
     try {
       const res = await api.get('/ca/billing/wallet');
       if (res && res.availableBalancePaise !== undefined) {
@@ -50,6 +77,13 @@ export const caBillingService = {
       // Prototype fallback
     }
     return { ...walletStore };
+  },
+
+  /**
+   * Get wallet transaction limits.
+   */
+  getWalletLimits: () => {
+    return { ...WALLET_LIMITS };
   },
 
   /**
@@ -64,6 +98,17 @@ export const caBillingService = {
    */
   getSuggestedAmounts: () => {
     return [...SUGGESTED_TOPUP_AMOUNTS];
+  },
+
+  /**
+   * Demo adapter helper: simulate gateway outcomes.
+   * Scenarios: 'SUCCESS' | 'PENDING' | 'FAILED'
+   */
+  setDemoScenarioForOrder: (orderId, scenario) => {
+    const order = pendingOrdersStore.get(orderId);
+    if (order) {
+      order.simulatedOutcome = scenario;
+    }
   },
 
   /**
@@ -149,6 +194,7 @@ export const caBillingService = {
 
     return {
       success: true,
+      status: 'SETTLED',
       transaction: settledTxn,
       newAvailableBalancePaise: walletStore.availableBalancePaise,
       message: `Top-up of ${formatINR(pendingOrder.amountPaise)} verified and settled successfully.`
@@ -208,18 +254,161 @@ export const caBillingService = {
       if (t.type !== 'REFUND' || t.status !== 'SETTLED') return false;
       const tDate = new Date(t.date);
       if (period === 'this_month') return tDate.getMonth() === now.getMonth() && tDate.getFullYear() === currentYear;
+      if (period === 'last_30d') {
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        return tDate >= thirtyDaysAgo;
+      }
+      if (period === 'current_fy') {
+        const fyStart = now.getMonth() >= 3 ? new Date(currentYear, 3, 1) : new Date(currentYear - 1, 3, 1);
+        return tDate >= fyStart;
+      }
       return true;
     }).reduce((acc, t) => acc + t.amountPaise, 0);
 
+    const netSpendPaise = Math.max(0, totalSpendPaise - refundsInPeriod);
+    const currentFY = getCurrentFinancialYear(now);
+    const monthName = now.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+
     return {
       period,
-      periodLabel: period === 'this_month' ? 'This Month (November 2026)' : period === 'last_30d' ? 'Last 30 Days' : period === 'current_fy' ? 'Current FY 2025-26' : 'All Time History',
+      periodLabel:
+        period === 'this_month'
+          ? `This Month (${monthName})`
+          : period === 'last_30d'
+          ? 'Last 30 Days'
+          : period === 'current_fy'
+          ? `Current ${currentFY}`
+          : 'All Time History',
       totalSpendPaise,
+      netSpendPaise,
+      isGross: true,
       esignSpendPaise,
       estampSpendPaise,
       otherSpendPaise,
       stampDutyPassthroughPaise,
       refundsPaise: refundsInPeriod
+    };
+  },
+
+  /**
+   * Check status of a pending top-up payment order or transaction.
+   * Reconciles gateway settlement without creating duplicate charges.
+   */
+  checkPaymentStatus: async (orderOrTxnId) => {
+    if (!orderOrTxnId) throw new Error('Order or transaction reference is required.');
+
+    // 1. If it's in pendingOrdersStore:
+    if (pendingOrdersStore.has(orderOrTxnId)) {
+      const pendingOrder = pendingOrdersStore.get(orderOrTxnId);
+      if (pendingOrder.simulatedOutcome === 'FAILED') {
+        pendingOrdersStore.delete(orderOrTxnId);
+        const failedTxn = {
+          id: `TXN-FAIL-${orderOrTxnId.slice(-6)}`,
+          date: new Date().toISOString(),
+          description: 'Wallet Top-up (Gateway Rejected)',
+          docRef: null,
+          type: 'TOPUP',
+          amountPaise: pendingOrder.amountPaise,
+          paymentSource: pendingOrder.paymentMethod === 'upi' ? 'UPI' : 'Bank Gateway',
+          status: 'FAILED',
+          providerRef: `FAIL-${orderOrTxnId}`,
+          serviceCategory: 'TOPUP',
+          breakdown: { basePaise: pendingOrder.amountPaise, gstPaise: 0, stampDutyPaise: 0 },
+          receiptId: null,
+          failureReason: 'Transaction was declined by payment gateway.'
+        };
+        transactionsStore = [failedTxn, ...transactionsStore];
+        return {
+          status: 'FAILED',
+          message: 'Payment verification failed: Gateway declined transaction.',
+          transaction: failedTxn
+        };
+      }
+      if (pendingOrder.simulatedOutcome === 'PENDING') {
+        return {
+          status: 'PENDING',
+          message: 'Payment is still awaiting gateway confirmation.',
+          order: pendingOrder
+        };
+      }
+      // Default / Success: settle the order
+      return await caBillingService.verifyAndSettleTopUp(orderOrTxnId);
+    }
+
+    // 2. If it was already settled
+    if (settledOrderIds.has(orderOrTxnId)) {
+      const txn = transactionsStore.find((t) => t.providerRef?.includes(orderOrTxnId) || t.id === orderOrTxnId);
+      return {
+        status: 'SETTLED',
+        message: 'This payment has already been verified and settled.',
+        transaction: txn
+      };
+    }
+
+    // 3. If it's a pending transaction in transactionsStore (e.g. TXN-ZD-88450)
+    const existingTxn = transactionsStore.find((t) => t.id === orderOrTxnId);
+    if (existingTxn) {
+      if (existingTxn.status === 'PENDING') {
+        // Reconcile pending transaction
+        existingTxn.status = 'SETTLED';
+        existingTxn.receiptId = `ZD-RCP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+        existingTxn.reconciledAt = new Date().toISOString();
+        if (existingTxn.type === 'TOPUP') {
+          walletStore.availableBalancePaise += existingTxn.amountPaise;
+          walletStore.lastReconciledAt = new Date().toISOString();
+        }
+        return {
+          status: 'SETTLED',
+          message: `Transaction ${orderOrTxnId} reconciled and settled successfully.`,
+          transaction: existingTxn,
+          newAvailableBalancePaise: walletStore.availableBalancePaise
+        };
+      }
+      return {
+        status: existingTxn.status,
+        message: `Transaction is currently ${existingTxn.status}.`,
+        transaction: existingTxn
+      };
+    }
+
+    throw new Error('Payment order not found or expired.');
+  },
+
+  /**
+   * Cancel an active pending top-up order.
+   * Records as CANCELLED in transaction history without charging or crediting wallet.
+   */
+  cancelTopUpOrder: async (orderId) => {
+    if (!orderId) throw new Error('Order reference is required.');
+    const order = pendingOrdersStore.get(orderId);
+    if (!order) {
+      throw new Error('Order not found or already closed.');
+    }
+
+    const cancelledTxn = {
+      id: `TXN-ZD-${Math.floor(88000 + Math.random() * 999)}`,
+      date: new Date().toISOString(),
+      description: 'Wallet Top-up (Cancelled by CA)',
+      docRef: null,
+      type: 'TOPUP',
+      amountPaise: order.amountPaise,
+      paymentSource: order.paymentMethod === 'upi' ? 'UPI' : 'Bank Gateway',
+      status: 'CANCELLED',
+      providerRef: `CANC-${orderId.slice(-8)}`,
+      serviceCategory: 'TOPUP',
+      breakdown: { basePaise: order.amountPaise, gstPaise: 0, stampDutyPaise: 0 },
+      receiptId: null,
+      failureReason: 'Top-up order cancelled by user before authorization.'
+    };
+
+    transactionsStore = [cancelledTxn, ...transactionsStore];
+    pendingOrdersStore.delete(orderId);
+
+    return {
+      success: true,
+      status: 'CANCELLED',
+      message: 'Top-up order was cancelled.',
+      transaction: cancelledTxn
     };
   },
 

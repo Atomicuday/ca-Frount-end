@@ -1,9 +1,9 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
 import { Users, Clock, CheckCircle2 } from 'lucide-react';
+import SummaryDetailsModal from './modals/SummaryDetailsModal.jsx';
 
 export default function SummaryCards({ summary = {} }) {
-  const navigate = useNavigate();
+  const [activeModalCard, setActiveModalCard] = useState(null);
 
   const totalClients = summary.totalClients ?? 48;
   const pendingDocuments = summary.pendingDocuments ?? 47;
@@ -20,8 +20,7 @@ export default function SummaryCards({ summary = {} }) {
       icon: Users,
       theme: 'blue',
       stroke1: '#38bdf8',
-      stroke2: '#1d68ed',
-      route: '/ca/clients'
+      stroke2: '#1d68ed'
     },
     {
       id: 'pending-docs',
@@ -33,8 +32,7 @@ export default function SummaryCards({ summary = {} }) {
       icon: Clock,
       theme: 'amber',
       stroke1: '#fbbf24',
-      stroke2: '#d97706',
-      route: '/ca/documents?status=pending'
+      stroke2: '#d97706'
     },
     {
       id: 'completed-docs',
@@ -46,19 +44,18 @@ export default function SummaryCards({ summary = {} }) {
       icon: CheckCircle2,
       theme: 'green',
       stroke1: '#34d399',
-      stroke2: '#059669',
-      route: '/ca/documents?status=completed'
+      stroke2: '#059669'
     }
   ];
 
-  const handleCardClick = (route) => {
-    navigate(route);
+  const handleCardClick = (cardId) => {
+    setActiveModalCard(cardId);
   };
 
-  const handleKeyDown = (event, route) => {
+  const handleKeyDown = (event, cardId) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      navigate(route);
+      setActiveModalCard(cardId);
     }
   };
 
@@ -74,9 +71,9 @@ export default function SummaryCards({ summary = {} }) {
               tabIndex={0}
               id={`summary-card-${card.id}`}
               className={`zd-resource-card zd-resource-card--${card.theme}`}
-              onClick={() => handleCardClick(card.route)}
-              onKeyDown={(e) => handleKeyDown(e, card.route)}
-              aria-label={`${card.label}: ${card.count}. Click to view filtered documents.`}
+              onClick={() => handleCardClick(card.id)}
+              onKeyDown={(e) => handleKeyDown(e, card.id)}
+              aria-label={`${card.label}: ${card.count}. Click to view details dialog.`}
             >
               {/* Layered smooth wave SVG artwork matching reference resource cards */}
               <svg
@@ -142,6 +139,14 @@ export default function SummaryCards({ summary = {} }) {
           );
         })}
       </div>
+
+      {/* Shared Summary Details Modal */}
+      <SummaryDetailsModal
+        isOpen={Boolean(activeModalCard)}
+        cardId={activeModalCard}
+        onClose={() => setActiveModalCard(null)}
+        triggerElementId={activeModalCard ? `summary-card-${activeModalCard}` : undefined}
+      />
     </section>
   );
 }

@@ -52,6 +52,18 @@ export default function ClientDraftReviewPage() {
   const [downloadError, setDownloadError] = useState('');
   const [downloadSuccess, setDownloadSuccess] = useState(false);
 
+  useEffect(() => {
+    if (!isChangesModalOpen && !isPreviewOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (isChangesModalOpen) setIsChangesModalOpen(false);
+        else if (isPreviewOpen) setIsPreviewOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isChangesModalOpen, isPreviewOpen]);
+
   // Load document by token or ID
   useEffect(() => {
     let active = true;
@@ -547,7 +559,7 @@ export default function ClientDraftReviewPage() {
       {/* Request Changes Sub-Modal */}
       {isChangesModalOpen && (
         <div className="zd-modal-backdrop" onClick={() => setIsChangesModalOpen(false)}>
-          <div className="zd-modal-card zd-glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
+          <div className="zd-modal-card zd-glass-card zd-request-changes-modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="zd-modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div className="zd-modal-icon-badge zd-modal-icon-badge--amber">
@@ -570,7 +582,7 @@ export default function ClientDraftReviewPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmitCorrection} style={{ padding: '0 24px 20px' }}>
+            <form onSubmit={handleSubmitCorrection} className="zd-modal-body zd-request-changes-form" style={{ padding: '0 24px 20px' }}>
               <div className="zd-modal-alert zd-modal-alert--info" style={{ marginBottom: 14 }}>
                 <AlertCircle size={14} />
                 <span>
@@ -668,7 +680,7 @@ export default function ClientDraftReviewPage() {
       {/* View Document Preview Modal */}
       {isPreviewOpen && (
         <div className="zd-modal-backdrop" onClick={() => setIsPreviewOpen(false)}>
-          <div className="zd-modal-card zd-glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680 }}>
+          <div className="zd-modal-card zd-glass-card zd-preview-modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="zd-modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div className="zd-modal-icon-badge zd-modal-icon-badge--green">

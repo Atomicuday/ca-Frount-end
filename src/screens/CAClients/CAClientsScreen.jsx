@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   Search,
   Plus,
@@ -13,11 +14,14 @@ import {
   ChevronRight,
   X
 } from 'lucide-react';
+import { ROUTES } from '../../constants/routes.js';
 import { caClientService } from '../../services/api/caClientService.js';
 import AddClientModal from './modals/AddClientModal.jsx';
+import TablePagination from '../../components/common/TablePagination.jsx';
 import './CAClients.css';
 
 export default function CAClientsScreen() {
+  const navigate = useNavigate();
   const [clients, setClients] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -36,6 +40,12 @@ export default function CAClientsScreen() {
   const addClientBtnRef = useRef(null);
   const filterBtnRef = useRef(null);
   const popoverRef = useRef(null);
+
+  // Navigate to Documents page filtered by client ID
+  const handleViewDocuments = useCallback((clientId) => {
+    if (!clientId) return;
+    navigate(`${ROUTES.CA_DOCUMENTS}?clientId=${encodeURIComponent(clientId)}`);
+  }, [navigate]);
 
   // Live Toast Notification
   const showToast = useCallback((message, type = 'success') => {
@@ -404,12 +414,14 @@ export default function CAClientsScreen() {
                   <td style={{ textAlign: 'right' }}>
                     <button
                       type="button"
-                      className="btn btn-outline"
+                      className="btn btn-outline ca-btn-view-docs"
                       style={{ fontSize: 12, padding: '4px 10px' }}
-                      title={`Open vault for ${client.name}`}
+                      title={`View documents for ${client.name}`}
+                      aria-label={`View documents for ${client.name}`}
+                      onClick={() => handleViewDocuments(client.id)}
                     >
-                      <span>Vault</span>
-                      <ExternalLink size={12} />
+                      <span>View Documents</span>
+                      <ExternalLink size={12} aria-hidden="true" />
                     </button>
                   </td>
                 </tr>
@@ -488,12 +500,14 @@ export default function CAClientsScreen() {
 
                   <button
                     type="button"
-                    className="btn btn-outline"
+                    className="btn btn-outline ca-btn-view-docs"
                     style={{ fontSize: 12, padding: '6px 14px', minHeight: 38 }}
-                    title={`Open vault for ${client.name}`}
+                    title={`View documents for ${client.name}`}
+                    aria-label={`View documents for ${client.name}`}
+                    onClick={() => handleViewDocuments(client.id)}
                   >
-                    <span>Open Vault</span>
-                    <ExternalLink size={12} />
+                    <span>View Documents</span>
+                    <ExternalLink size={12} aria-hidden="true" />
                   </button>
                 </div>
               </div>
@@ -502,36 +516,16 @@ export default function CAClientsScreen() {
         )}
 
         {/* Pagination bar */}
-        {filteredClients.length > 0 && (
-          <div className="ca-pagination-bar">
-            <span className="ca-pagination-info">
-              Showing {(currentPage - 1) * pageSize + 1}–
-              {Math.min(currentPage * pageSize, filteredClients.length)} of {filteredClients.length}{' '}
-              clients
-            </span>
-            <div className="ca-pagination-controls">
-              <button
-                type="button"
-                className="ca-pagination-btn"
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                aria-label="Previous page"
-              >
-                <ChevronLeft size={16} />
-                <span>Previous</span>
-              </button>
-              <button
-                type="button"
-                className="ca-pagination-btn"
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                aria-label="Next page"
-              >
-                <span>Next</span>
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
+        {!isLoading && (
+          <TablePagination
+            currentPage={currentPage}
+            pageSize={pageSize}
+            totalItems={filteredClients.length}
+            totalPages={totalPages}
+            itemName="clients"
+            onPageChange={(p) => setCurrentPage(p)}
+            loading={isLoading}
+          />
         )}
       </div>
 

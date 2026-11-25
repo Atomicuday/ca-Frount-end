@@ -46,6 +46,17 @@ export default function CompletionModal({ isOpen, onClose, documentId, onOpenPre
     };
   }, [isOpen, documentId]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const isFinalFileProcessing = downloadInfo && (downloadInfo.isReady === false || downloadInfo.status === 'PROCESSING');
@@ -67,7 +78,7 @@ export default function CompletionModal({ isOpen, onClose, documentId, onOpenPre
 
   return (
     <div className="zd-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="completion-title">
-      <div className="zd-modal-card zd-glass-card zd-completion-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
+      <div className="zd-modal-card zd-glass-card zd-completion-modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="zd-modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div className="zd-modal-icon-badge zd-modal-icon-badge--green">
@@ -85,7 +96,7 @@ export default function CompletionModal({ isOpen, onClose, documentId, onOpenPre
           </button>
         </div>
 
-        <div className="zd-completion-hero-view">
+        <div className="zd-modal-body zd-completion-hero-view">
           <div className="zd-success-check-badge">
             <CheckCircle2 size={46} color="#16a34a" />
           </div>
@@ -165,49 +176,49 @@ export default function CompletionModal({ isOpen, onClose, documentId, onOpenPre
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Action Buttons: View Document & Download Document */}
-          <div className="zd-modal-actions" style={{ marginTop: 24, width: '100%', display: 'flex', gap: 12 }}>
+        {/* Action Buttons: View Document & Download Document */}
+        <div className="zd-modal-actions" style={{ marginTop: 'auto', flexShrink: 0, width: '100%', display: 'flex', gap: 12 }}>
+          <button
+            type="button"
+            className="zd-btn-action zd-btn-action--secondary"
+            style={{ flex: 1, height: 42 }}
+            onClick={() => {
+              onClose();
+              if (onOpenPreview) onOpenPreview(documentId);
+            }}
+          >
+            <Eye size={15} />
+            <span>View Document</span>
+          </button>
+          {isFinalFileProcessing ? (
             <button
               type="button"
-              className="zd-btn-action zd-btn-action--secondary"
+              disabled
+              className="zd-btn-action zd-btn-action--disabled"
               style={{ flex: 1, height: 42 }}
-              onClick={() => {
-                onClose();
-                if (onOpenPreview) onOpenPreview(documentId);
-              }}
+              title="The final certified copy is being assembled by the statutory repository."
             >
-              <Eye size={15} />
-              <span>View Document</span>
+              <Loader2 size={14} className="spinning" />
+              <span>Final document processing</span>
             </button>
-            {isFinalFileProcessing ? (
-              <button
-                type="button"
-                disabled
-                className="zd-btn-action zd-btn-action--disabled"
-                style={{ flex: 1, height: 42 }}
-                title="The final certified copy is being assembled by the statutory repository."
-              >
-                <Loader2 size={14} className="spinning" />
-                <span>Final document processing</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="zd-btn-action zd-btn-action--primary"
-                style={{ flex: 1, height: 42 }}
-                onClick={handleDownload}
-                disabled={isDownloading}
-              >
-                {isDownloading ? (
-                  <Loader2 size={15} className="spinning" />
-                ) : (
-                  <Download size={15} />
-                )}
-                <span>{isDownloading ? 'Downloading…' : 'Download Document'}</span>
-              </button>
-            )}
-          </div>
+          ) : (
+            <button
+              type="button"
+              className="zd-btn-action zd-btn-action--primary"
+              style={{ flex: 1, height: 42 }}
+              onClick={handleDownload}
+              disabled={isDownloading}
+            >
+              {isDownloading ? (
+                <Loader2 size={15} className="spinning" />
+              ) : (
+                <Download size={15} />
+              )}
+              <span>{isDownloading ? 'Downloading…' : 'Download Document'}</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

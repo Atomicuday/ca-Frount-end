@@ -572,20 +572,32 @@ export default function AddClientModal({ isOpen, onClose, onClientCreated }) {
 
             <div className="zd-form-field">
               <label htmlFor="input-phone" className="zd-form-label">
-                Mobile Number (for WhatsApp Draft Link) <span className="zd-required-star">*</span>
+                Mobile Number <span className="zd-required-star">*</span>
               </label>
               <div className="zd-phone-input-group">
-                <span className="zd-phone-prefix">{countryCode}</span>
+                <select
+                  className="zd-country-code-select"
+                  value={countryCode}
+                  onChange={(e) => setCountryCode(e.target.value)}
+                  aria-label="Country calling code"
+                >
+                  <option value="+91">🇮🇳 +91</option>
+                  <option value="+1">🇺🇸 +1</option>
+                  <option value="+44">🇬🇧 +44</option>
+                  <option value="+971">🇦🇪 +971</option>
+                  <option value="+65">🇸🇬 +65</option>
+                </select>
                 <input
                   id="input-phone"
                   type="tel"
-                  className={`zd-form-input zd-phone-field ${errors.phone ? 'error' : ''}`}
-                  placeholder="98860 11223"
+                  className={`zd-form-input ${errors.phone ? 'is-invalid error' : ''}`}
+                  placeholder="98765 43210"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
+                  maxLength={15}
                 />
               </div>
-              {errors.phone && <span className="zd-field-error">{errors.phone}</span>}
+              {errors.phone && <span className="zd-field-error-text zd-field-error">{errors.phone}</span>}
             </div>
 
             <div className="zd-form-field">
@@ -604,31 +616,50 @@ export default function AddClientModal({ isOpen, onClose, onClientCreated }) {
             </div>
           </div>
 
-          {/* Dynamic Extra Fields List */}
-          {additionalFields.length > 0 && (
-            <div className="zd-extra-fields-container" style={{ marginTop: 10 }}>
-              <span className="zd-extra-fields-heading">Additional Contact Details</span>
+          {/* Dynamic Extra Fields ("Add More" button & list of added details) */}
+          <div className="zd-extra-fields-section">
+            <div className="zd-extra-fields-header">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span className="zd-form-label" style={{ margin: 0 }}>Additional Details</span>
+                <span className="zd-section-sub" style={{ margin: 0 }}>
+                  Optional contact numbers, alternate emails, or custom practice fields
+                </span>
+              </div>
+              <button
+                type="button"
+                id="btn-add-more-details"
+                className="zd-btn-add-more"
+                onClick={handleOpenAddFieldDialog}
+              >
+                <Plus size={14} aria-hidden="true" />
+                <span>Add More</span>
+              </button>
+            </div>
+
+            {additionalFields.length > 0 && (
               <div className="zd-extra-fields-list">
                 {additionalFields.map((field) => (
-                  <div key={field.id} className="zd-extra-field-row">
+                  <div key={field.id} className="zd-extra-field-card">
                     <div className="zd-extra-field-content">
-                      <span className="zd-extra-field-label">{field.label}:</span>
-                      <strong className="zd-extra-field-value">{field.value}</strong>
+                      <span className="zd-extra-field-label">{field.label}</span>
+                      <span className="zd-extra-field-value">{field.value}</span>
                     </div>
                     <div className="zd-extra-field-actions">
                       <button
                         type="button"
-                        className="zd-extra-action-btn"
+                        className="zd-btn-field-icon"
                         onClick={() => handleOpenEditFieldDialog(field)}
                         title={`Edit ${field.label}`}
+                        aria-label={`Edit ${field.label}`}
                       >
                         <Edit2 size={13} />
                       </button>
                       <button
                         type="button"
-                        className="zd-extra-action-btn zd-extra-action-btn--delete"
+                        className="zd-btn-field-icon zd-btn-field-icon--danger"
                         onClick={() => handleRemoveField(field.id)}
                         title={`Remove ${field.label}`}
+                        aria-label={`Remove ${field.label}`}
                       >
                         <Trash2 size={13} />
                       </button>
@@ -636,21 +667,7 @@ export default function AddClientModal({ isOpen, onClose, onClientCreated }) {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* Add More Button */}
-          <div style={{ marginTop: 8 }}>
-            <button
-              type="button"
-              className="zd-btn-action zd-btn-action--secondary"
-              id="btn-add-more-fields"
-              onClick={handleOpenAddFieldDialog}
-              style={{ fontSize: 12.5, height: 34, gap: 6 }}
-            >
-              <Plus size={14} />
-              <span>Add More Details</span>
-            </button>
+            )}
           </div>
 
           {/* SECTION 4: Template-Specific Fields */}
@@ -711,8 +728,8 @@ export default function AddClientModal({ isOpen, onClose, onClientCreated }) {
 
         {/* Small Dialog for "Add More" Field Entry */}
         {isFieldDialogOpen && (
-          <div className="zd-submodal-backdrop" onClick={() => setIsFieldDialogOpen(false)}>
-            <div className="zd-submodal-card zd-glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+          <div className="zd-submodal-backdrop zd-field-dialog-overlay" onClick={() => setIsFieldDialogOpen(false)}>
+            <div className="zd-submodal-card zd-field-dialog-card zd-glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
               <div className="zd-submodal-header">
                 <h3 className="zd-submodal-title">{editingFieldId ? 'Edit Detail' : 'Add Contact Detail'}</h3>
                 <button

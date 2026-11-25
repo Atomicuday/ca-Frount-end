@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   MessageSquareQuote,
@@ -16,6 +16,17 @@ export default function EditRequestsModal({ isOpen, onClose, document, onDecisio
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen || !document) return null;
 
@@ -63,7 +74,7 @@ export default function EditRequestsModal({ isOpen, onClose, document, onDecisio
 
   return (
     <div className="zd-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="edit-requests-title">
-      <div className="zd-modal-card zd-glass-card zd-edit-requests-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 660 }}>
+      <div className="zd-modal-card zd-glass-card zd-edit-requests-modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="zd-modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div className="zd-modal-icon-badge zd-modal-icon-badge--amber">

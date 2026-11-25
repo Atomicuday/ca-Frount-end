@@ -285,3 +285,462 @@ body {
   -webkit-overflow-scrolling: touch;
   position: relative;
 }
+
+/* ==========================================================================
+   Universal Centered Floating Dialog Layout Foundation
+   Replaces previous fullscreen layout.
+   Applies to ALL application dialogs across desktop, tablet, and mobile:
+   - Dashboard summary detail dialogs
+   - Add Client forms & field dialogs
+   - Edit requests & edit inputs
+   - Payment checkout
+   - Wallet recharge (Add Money) & Transaction details
+   - Document previews & completion modals
+   - Diagnostics, logout, and discard confirmations
+   ========================================================================== */
+
+/* Screen reader only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Prevent background page scrolling when any dialog is open */
+body:has(.zd-modal-backdrop),
+body:has(.modal-overlay),
+body:has(.zd-summary-modal-backdrop),
+body:has(.zd-field-dialog-overlay),
+body:has(.zd-discard-confirm-overlay) {
+  overflow: hidden !important;
+}
+
+/* Fullscreen Dimmed Backdrop with Subtle Blur (Only backdrop uses fixed & inset: 0) */
+.zd-modal-backdrop,
+.modal-overlay,
+.zd-summary-modal-backdrop,
+.zd-submodal-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  padding: 24px !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  z-index: 1000 !important;
+  background: rgba(15, 23, 42, 0.65) !important;
+  backdrop-filter: blur(6px) !important;
+  -webkit-backdrop-filter: blur(6px) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* Stacked nested dialog backdrops (Field entry dialog, discard confirmation) */
+.zd-field-dialog-overlay,
+.zd-discard-confirm-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  padding: 16px !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  z-index: 1200 !important;
+  background: rgba(15, 23, 42, 0.72) !important;
+  backdrop-filter: blur(6px) !important;
+  -webkit-backdrop-filter: blur(6px) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* Universal Centered Floating Dialog Panels (max-height: calc(100dvh - 48px)) */
+.zd-modal-card,
+.zd-summary-details-modal-card,
+.zd-add-client-modal-card,
+.zd-add-money-modal-card,
+.zd-txn-details-modal-card,
+.zd-edit-requests-modal-card,
+.zd-send-link-modal-card,
+.zd-payment-modal-card,
+.zd-completion-modal-card,
+.zd-preview-modal-card,
+.zd-edit-inputs-modal-card,
+.zd-request-changes-modal-card,
+.zd-provider-esign-modal-card,
+.ca-diag-modal,
+.zd-logout-modal-content,
+.zd-field-dialog-card,
+.zd-discard-confirm-dialog,
+.zd-submodal-card {
+  position: relative !important;
+  inset: auto !important;
+  margin: auto !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 20px !important;
+  box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.15), 0 8px 10px -6px rgba(15, 23, 42, 0.1) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  z-index: 1001 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: calc(100dvh - 48px) !important;
+}
+
+/* Sizing: Large Table & Detail Dialogs */
+.ca-large-modal-card,
+.ca-large-table-modal-card {
+  width: min(1200px, calc(100vw - 64px)) !important;
+  max-height: calc(100dvh - 48px) !important;
+  max-height: calc(100dvh - 64px) !important;
+}
+
+/* Dashboard Summary Details Dialogs: Total Clients, Pending Documents, Completed Documents */
+.zd-summary-details-modal-card,
+.zd-modal-card.zd-summary-details-modal-card {
+  width: min(1100px, calc(100vw - 64px)) !important;
+  max-width: min(1100px, calc(100vw - 64px)) !important;
+  max-height: calc(100dvh - 48px) !important;
+}
+
+.zd-preview-modal-card {
+  width: min(960px, calc(100vw - 64px)) !important;
+  max-height: calc(100dvh - 48px) !important;
+}
+
+.ca-diag-modal {
+  width: min(840px, calc(100vw - 64px)) !important;
+  max-height: calc(100dvh - 48px) !important;
+}
+
+/* Sizing: Forms & Payment (approx 640-760px) */
+.zd-add-client-modal-card {
+  width: min(720px, calc(100vw - 64px)) !important;
+  max-height: calc(100dvh - 48px) !important;
+}
+
+.zd-edit-requests-modal-card {
+  width: min(700px, calc(100vw - 64px)) !important;
+  max-height: calc(100dvh - 48px) !important;
+}
+
+.zd-payment-modal-card {
+  width: min(680px, calc(100vw - 64px)) !important;
+  max-height: calc(100dvh - 48px) !important;
+}
+
+.zd-modal-card:not(.zd-summary-details-modal-card) {
+  width: min(680px, calc(100vw - 64px)) !important;
+  max-height: calc(100dvh - 48px) !important;
+}
+
+.zd-send-link-modal-card,
+.zd-completion-modal-card,
+.zd-add-money-modal-card,
+.zd-txn-details-modal-card,
+.zd-edit-inputs-modal-card,
+.zd-request-changes-modal-card {
+  width: min(640px, calc(100vw - 64px)) !important;
+  max-height: calc(100dvh - 48px) !important;
+}
+
+.zd-provider-esign-modal-card {
+  width: min(540px, calc(100vw - 64px)) !important;
+  max-height: calc(100dvh - 48px) !important;
+}
+
+/* Sizing: Confirmations & Small Dialogs (approx 420-480px) */
+.zd-logout-modal-content,
+.zd-discard-confirm-dialog {
+  width: min(440px, calc(100vw - 64px)) !important;
+  max-height: calc(100dvh - 48px) !important;
+}
+
+.zd-field-dialog-card,
+.zd-submodal-card {
+  width: min(480px, calc(100vw - 64px)) !important;
+  max-height: calc(100dvh - 48px) !important;
+  z-index: 1201 !important;
+}
+
+.zd-discard-confirm-dialog {
+  z-index: 1201 !important;
+}
+
+/* Mobile Responsive Sizing: 12px space around panel, width/max-height calc(100vw/dvh - 24px), preserved 20px corners */
+@media (max-width: 767.98px) {
+  .zd-modal-backdrop,
+  .modal-overlay,
+  .zd-summary-modal-backdrop {
+    padding: 12px !important;
+  }
+
+  .zd-modal-card,
+  .zd-summary-details-modal-card,
+  .zd-add-client-modal-card,
+  .zd-add-money-modal-card,
+  .zd-txn-details-modal-card,
+  .zd-edit-requests-modal-card,
+  .zd-send-link-modal-card,
+  .zd-payment-modal-card,
+  .zd-completion-modal-card,
+  .zd-preview-modal-card,
+  .zd-edit-inputs-modal-card,
+  .zd-request-changes-modal-card,
+  .zd-provider-esign-modal-card,
+  .ca-diag-modal,
+  .zd-logout-modal-content,
+  .zd-field-dialog-card,
+  .zd-discard-confirm-dialog {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+    max-height: calc(100dvh - 24px) !important;
+    border-radius: 20px !important;
+  }
+}
+
+/* Header at top with title on the left and Close button on the right */
+.zd-modal-header,
+.zd-summary-modal-header,
+.ca-diag-modal-header,
+.zd-field-dialog-header {
+  flex-shrink: 0 !important;
+  position: relative !important;
+  top: auto !important;
+  background: #ffffff !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  padding: 18px 24px !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  box-sizing: border-box !important;
+  border-top-left-radius: 20px !important;
+  border-top-right-radius: 20px !important;
+}
+
+/* Close button on header */
+.zd-modal-close-btn,
+.zd-summary-modal-header .zd-modal-close-btn,
+.zd-field-dialog-header .zd-modal-close-btn,
+.ca-diag-modal-header .zd-trend-refresh-btn {
+  min-width: 36px !important;
+  min-height: 36px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 10px !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #f8fafc !important;
+  color: #475467 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  padding: 6px !important;
+}
+
+.zd-modal-close-btn:hover,
+.zd-modal-close-btn:focus-visible,
+.zd-summary-modal-header .zd-modal-close-btn:hover,
+.ca-diag-modal-header .zd-trend-refresh-btn:hover {
+  background: #fee2e2 !important;
+  color: #dc2626 !important;
+  border-color: #fca5a5 !important;
+  outline: none !important;
+}
+
+/* Flexible content area that uses available width and scrolls vertically with min-height: 0 */
+.zd-modal-body,
+.zd-summary-modal-body,
+.zd-add-client-form-body,
+.zd-preview-body,
+.zd-requests-list,
+.zd-payment-body,
+.zd-payment-modal-body,
+.zd-add-money-body,
+.zd-add-money-form,
+.zd-send-modal-body,
+.zd-send-link-body,
+.zd-send-success-box,
+.zd-txn-details-body,
+.zd-field-dialog-body,
+.ca-diag-modal-body,
+.zd-modal-locked-content,
+.zd-completion-hero-view,
+.zd-field-dialog-form,
+.zd-request-changes-form,
+.zd-provider-esign-form,
+.zd-modal-card > form:not(.zd-modal-header):not(.zd-modal-footer):not(.zd-modal-actions),
+.zd-modal-card > .zd-modal-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior-y: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  padding: 20px 24px !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: #cbd5e1 transparent !important;
+}
+
+/* Internal forms inside dialogs must flex vertically without clipping */
+.zd-modal-card > form,
+.zd-modal-form,
+.zd-add-client-form,
+.zd-payment-form {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Custom smooth scrollbars for all modal bodies */
+.zd-modal-body::-webkit-scrollbar,
+.zd-summary-modal-body::-webkit-scrollbar,
+.zd-add-client-form-body::-webkit-scrollbar,
+.zd-preview-body::-webkit-scrollbar,
+.zd-requests-list::-webkit-scrollbar,
+.zd-payment-modal-body::-webkit-scrollbar,
+.zd-add-money-form::-webkit-scrollbar,
+.zd-send-modal-body::-webkit-scrollbar,
+.zd-txn-details-body::-webkit-scrollbar,
+.zd-field-dialog-body::-webkit-scrollbar,
+.zd-completion-hero-view::-webkit-scrollbar,
+.zd-request-changes-form::-webkit-scrollbar,
+.zd-provider-esign-form::-webkit-scrollbar {
+  width: 6px !important;
+}
+
+.zd-modal-body::-webkit-scrollbar-track,
+.zd-summary-modal-body::-webkit-scrollbar-track,
+.zd-add-client-form-body::-webkit-scrollbar-track,
+.zd-preview-body::-webkit-scrollbar-track,
+.zd-requests-list::-webkit-scrollbar-track,
+.zd-payment-modal-body::-webkit-scrollbar-track,
+.zd-add-money-form::-webkit-scrollbar-track,
+.zd-send-modal-body::-webkit-scrollbar-track,
+.zd-txn-details-body::-webkit-scrollbar-track,
+.zd-field-dialog-body::-webkit-scrollbar-track,
+.zd-completion-hero-view::-webkit-scrollbar-track,
+.zd-request-changes-form::-webkit-scrollbar-track,
+.zd-provider-esign-form::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.zd-modal-body::-webkit-scrollbar-thumb,
+.zd-summary-modal-body::-webkit-scrollbar-thumb,
+.zd-add-client-form-body::-webkit-scrollbar-thumb,
+.zd-preview-body::-webkit-scrollbar-thumb,
+.zd-requests-list::-webkit-scrollbar-thumb,
+.zd-payment-modal-body::-webkit-scrollbar-thumb,
+.zd-add-money-form::-webkit-scrollbar-thumb,
+.zd-send-modal-body::-webkit-scrollbar-thumb,
+.zd-txn-details-body::-webkit-scrollbar-thumb,
+.zd-field-dialog-body::-webkit-scrollbar-thumb,
+.zd-completion-hero-view::-webkit-scrollbar-thumb,
+.zd-request-changes-form::-webkit-scrollbar-thumb,
+.zd-provider-esign-form::-webkit-scrollbar-thumb {
+  background: #cbd5e1 !important;
+  border-radius: 4px !important;
+}
+
+/* Footer actions / pagination at bottom */
+.zd-modal-footer,
+.zd-add-client-footer,
+.zd-modal-actions,
+.zd-summary-modal-pagination-wrap,
+.zd-field-dialog-actions,
+.zd-field-dialog-footer,
+.zd-checkout-action-strip {
+  flex-shrink: 0 !important;
+  position: relative !important;
+  bottom: auto !important;
+  background: #ffffff !important;
+  border-top: 1px solid #f1f5f9 !important;
+  padding: 16px 24px !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  border-bottom-left-radius: 20px !important;
+  border-bottom-right-radius: 20px !important;
+}
+
+/* Tables expand across available width */
+.zd-summary-table-wrap,
+.ca-table-wrap {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.zd-summary-table {
+  width: 100% !important;
+  table-layout: auto !important;
+}
+
+/* Forms layout: multi-column on desktop, single column on mobile */
+@media (min-width: 768px) {
+  .zd-form-grid-2 {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 16px 20px !important;
+  }
+
+  .zd-form-grid-3 {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 16px 20px !important;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .zd-modal-header,
+  .zd-summary-modal-header,
+  .ca-diag-modal-header,
+  .zd-field-dialog-header {
+    padding: 14px 16px !important;
+  }
+
+  .zd-modal-body,
+  .zd-summary-modal-body,
+  .zd-add-client-form-body,
+  .zd-preview-body,
+  .zd-requests-list,
+  .zd-field-dialog-body {
+    padding: 16px !important;
+  }
+
+  .zd-modal-footer,
+  .zd-add-client-footer,
+  .zd-modal-actions,
+  .zd-summary-modal-pagination-wrap {
+    padding: 12px 16px !important;
+  }
+
+  .zd-form-grid-2,
+  .zd-form-grid-3 {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+}
+

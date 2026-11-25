@@ -47,6 +47,18 @@ export default function ClientSigningPage() {
   const [downloadError, setDownloadError] = useState('');
   const [downloadSuccess, setDownloadSuccess] = useState(false);
 
+  useEffect(() => {
+    if (!signingModalOpen && !isPreviewOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (signingModalOpen) setSigningModalOpen(false);
+        else if (isPreviewOpen) setIsPreviewOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [signingModalOpen, isPreviewOpen]);
+
   // Load document by token or ID
   const loadDoc = async () => {
     try {
@@ -551,7 +563,7 @@ export default function ClientSigningPage() {
       {/* Provider eSign Modal Simulator */}
       {signingModalOpen && (
         <div className="zd-modal-backdrop" onClick={() => setSigningModalOpen(false)}>
-          <div className="zd-modal-card zd-glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+          <div className="zd-modal-card zd-glass-card zd-provider-esign-modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="zd-modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div className="zd-modal-icon-badge">
@@ -572,7 +584,7 @@ export default function ClientSigningPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCompleteProviderSign} style={{ padding: '0 24px 20px' }}>
+            <form onSubmit={handleCompleteProviderSign} className="zd-modal-body zd-provider-esign-form" style={{ padding: '0 24px 20px' }}>
               <div className="zd-modal-tab-group" style={{ marginBottom: 14 }}>
                 <button
                   type="button"
@@ -662,7 +674,7 @@ export default function ClientSigningPage() {
       {/* View Document Preview Modal */}
       {isPreviewOpen && (
         <div className="zd-modal-backdrop" onClick={() => setIsPreviewOpen(false)}>
-          <div className="zd-modal-card zd-glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680 }}>
+          <div className="zd-modal-card zd-glass-card zd-preview-modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="zd-modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div className="zd-modal-icon-badge zd-modal-icon-badge--green">

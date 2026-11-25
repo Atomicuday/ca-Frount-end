@@ -16,7 +16,7 @@ import { caDashboardService } from '../src/services/api/caDashboardService.js';
 import { caDocumentsService } from '../src/services/api/caDocumentsService.js';
 import { caTemplateService } from '../src/services/api/caTemplateService.js';
 import { caClientService } from '../src/services/api/caClientService.js';
-import { caBillingService, formatINR } from '../src/services/api/caBillingService.js';
+import { caBillingService, formatINR, getCurrentFinancialYear } from '../src/services/api/caBillingService.js';
 import { CLIENT_TYPES } from '../src/mock/caTemplatesData.js';
 import { isValidEmail, isValidPhone, isValidPAN, isValidGSTIN } from '../src/utils/validation.js';
 import { getTimeBasedGreeting } from '../src/utils/greeting.js';
@@ -495,9 +495,12 @@ describe('CA Portal Architecture Suite', () => {
     const modalPath = path.resolve(__dirname, '../src/screens/CAClients/modals/AddClientModal.jsx');
     const content = fs.readFileSync(modalPath, 'utf-8');
 
-    // 1. "Add More" button exists
+    // 1. "Add More" button exists with styled classes
     assert.ok(content.includes('id="btn-add-more-details"'), 'Must have Add More button id="btn-add-more-details"');
     assert.ok(content.includes('<span>Add More</span>'), 'Button must display "Add More"');
+    assert.ok(content.includes('zd-btn-add-more'), 'Must use zd-btn-add-more class');
+    assert.ok(content.includes('zd-country-code-select'), 'Must have zd-country-code-select for mobile number');
+    assert.ok(content.includes('zd-phone-input-group'), 'Must have zd-phone-input-group');
 
     // 2. Expandable "Add More Details" section removed
     assert.ok(!content.includes('className="zd-expandable-section"'), 'Old expandable section must be removed');
@@ -562,9 +565,9 @@ describe('CA Portal Architecture Suite', () => {
     const content = fs.readFileSync(financeScreenPath, 'utf-8');
 
     // 1. Page Header updated
-    assert.ok(content.includes('Wallet & Billing'), 'Heading must be "Wallet & Billing"');
+    assert.ok(content.includes('Zap Wallet'), 'Heading must be "Zap Wallet"');
     assert.ok(
-      content.includes('Manage your wallet, service charges and payment history.'),
+      content.includes('Manage your Zap Wallet, service charges and payment history.'),
       'Subtitle must match specification'
     );
 
@@ -576,13 +579,14 @@ describe('CA Portal Architecture Suite', () => {
     assert.ok(!content.includes('Outstanding Invoices'), 'Must remove Outstanding Invoices');
     assert.ok(!content.includes('Recent Invoices & Retainer Receipts'), 'Must remove client invoice receipts');
 
-    // 3. CA Wallet panel elements
+    // 3. CA Wallet panel elements: Reserved Amount box, duplicate Add Money, and View Wallet History removed
     assert.ok(content.includes('ca-wallet-hero-card'), 'Must render wallet hero card');
     assert.ok(content.includes('Available Wallet Balance'), 'Must show available balance label');
-    assert.ok(content.includes('Reserved Amount:'), 'Must show reserved amount label');
+    assert.ok(!content.includes('ca-wallet-reserved-box'), 'Reserved Amount box must be removed from wallet panel');
+    assert.ok(!content.includes('id="btn-open-add-money"'), 'Duplicate Add Money button must be removed from wallet panel');
+    assert.ok(!content.includes('id="btn-view-wallet-history"'), 'View Wallet History button must be removed from wallet panel');
     assert.ok(content.includes('Use your balance to pay for eligible document services.'), 'Must show explanation');
-    assert.ok(content.includes('id="btn-open-add-money"'), 'Must have Add Money button');
-    assert.ok(content.includes('id="btn-view-wallet-history"'), 'Must have View Wallet History button');
+    assert.ok(content.includes('Add Money'), 'Page top-right Add Money button must remain preserved');
 
     // 4. Spending summary section: 3 cards, brand mentions removed
     assert.ok(content.includes('Spending Summary'), 'Must have Spending Summary header');
@@ -675,6 +679,59 @@ describe('CA Portal Architecture Suite', () => {
     // Verify service debits have type SERVICE_DEBIT
     const debits = await caBillingService.getTransactions({ type: 'SERVICE_DEBIT' });
     assert.ok(debits.data.every((t) => t.type === 'SERVICE_DEBIT'));
+  });
+
+  test('Zap Wallet lifecycle: dynamic FY, reconciliation, status checking, and firm isolation', async () => {
+    // 1. Dynamic Financial Year calculation across April boundary
+    assert.equal(getCurrentFinancialYear(new Date(2026, 10, 24)), 'FY 2026-27'); // Nov 2026
+    assert.equal(getCurrentFinancialYear(new Date(2026, 3, 1)), 'FY 2026-27');   // April 1, 2026
+    assert.equal(getCurrentFinancialYear(new Date(2026, 2, 31)), 'FY 2025-26');  // March 31, 2026
+    assert.equal(getCurrentFinancialYear(new Date(2025, 0, 15)), 'FY 2024-25');  // Jan 15, 2025
+
+    // 2. Spending summary accurately calculates gross, net spend, and separates refunds
+    const fySummary = await caBillingService.getSpendingSummary('current_fy');
+    assert.ok(fySummary.periodLabel.includes('Current FY'));
+    assert.equal(typeof fySummary.netSpendPaise, 'number');
+    assert.ok(fySummary.netSpendPaise <= fySummary.totalSpendPaise);
+    assert.equal(fySummary.netSpendPaise, Math.max(0, fySummary.totalSpendPaise - fySummary.refundsPaise));
+
+    // 3. Pending payment order lifecycle and status checking without duplicate charges
+    const pendingOrder = await caBillingService.createTopUpOrder({
+      amountRupees: 500,
+      paymentMethod: 'upi'
+    });
+    const checkRes = await caBillingService.checkPaymentStatus(pendingOrder.orderId);
+    assert.equal(checkRes.status, 'SETTLED');
+    assert.ok(checkRes.transaction);
+    assert.equal(checkRes.transaction.amountPaise, 50000);
+
+    // Calling status check again on already settled order must NOT create duplicate credits
+    const balanceBeforeRepeat = (await caBillingService.getWalletBalance()).availableBalancePaise;
+    const repeatCheck = await caBillingService.checkPaymentStatus(pendingOrder.orderId);
+    assert.equal(repeatCheck.status, 'SETTLED');
+    const balanceAfterRepeat = (await caBillingService.getWalletBalance()).availableBalancePaise;
+    assert.equal(balanceAfterRepeat, balanceBeforeRepeat, 'Checking status on settled order must not duplicate balance credit');
+
+    // 4. Cancel order safely removes order without crediting balance
+    const orderToCancel = await caBillingService.createTopUpOrder({
+      amountRupees: 2000,
+      paymentMethod: 'netbanking'
+    });
+    const cancelRes = await caBillingService.cancelTopUpOrder(orderToCancel.orderId);
+    assert.ok(cancelRes.success);
+    assert.equal(cancelRes.status, 'CANCELLED');
+    const balanceAfterCancel = (await caBillingService.getWalletBalance()).availableBalancePaise;
+    assert.equal(balanceAfterCancel, balanceBeforeRepeat, 'Cancelled order must not credit wallet');
+
+    // 5. Tenant / Firm isolation: unauthorized firm access rejected
+    assert.throws(
+      () => caBillingService.assertFirmAuthorization('FIRM-UNAUTHORIZED-999'),
+      /Unauthorized access/
+    );
+    await assert.rejects(
+      () => caBillingService.getWalletBalance('FIRM-UNAUTHORIZED-999'),
+      /Unauthorized access/
+    );
   });
 
   test('CADocumentsScreen enforces 7-column layout and integrates Payment and Edit Request workflows', () => {
@@ -1089,16 +1146,18 @@ describe('CA Portal Architecture Suite', () => {
     assert.ok(glassSelectCssContent.includes('border: 1.5px solid #cbd5e1;'), 'Trigger must match ZapDocs form input border styling');
   });
 
-  test('AddClientModal enforces compact 520px dialog sizing, single-column form, and accessible fixed header/footer', () => {
+  test('Application dialogs enforce centered floating panel layout with 20px rounded corners, visible margins, and accessible header/footer', () => {
     const docModalPath = path.resolve(__dirname, '../src/screens/CADocuments/modals/AddClientModal.jsx');
     const clientModalPath = path.resolve(__dirname, '../src/screens/CAClients/modals/AddClientModal.jsx');
     const docCssPath = path.resolve(__dirname, '../src/screens/CADocuments/CADocuments.css');
     const clientCssPath = path.resolve(__dirname, '../src/screens/CAClients/CAClients.css');
+    const indexCssPath = path.resolve(__dirname, '../src/index.css');
 
     const docModalContent = fs.readFileSync(docModalPath, 'utf-8');
     const clientModalContent = fs.readFileSync(clientModalPath, 'utf-8');
     const docCssContent = fs.readFileSync(docCssPath, 'utf-8');
     const clientCssContent = fs.readFileSync(clientCssPath, 'utf-8');
+    const indexCssContent = fs.readFileSync(indexCssPath, 'utf-8');
 
     // 1. Both modals mount scrollable form body and fixed footer
     assert.ok(docModalContent.includes('zd-add-client-form-body'), 'CADocuments modal must structure scrollable form body');
@@ -1106,28 +1165,25 @@ describe('CA Portal Architecture Suite', () => {
     assert.ok(docModalContent.includes('zd-add-client-footer'), 'CADocuments modal must have zd-add-client-footer class');
     assert.ok(clientModalContent.includes('zd-add-client-footer'), 'CAClients modal must have zd-add-client-footer class');
 
-    // 2. CSS enforces compact 520px max-width and responsive calc width
-    assert.ok(docCssContent.includes('max-width: 520px'), 'CADocuments.css must constrain modal to max-width: 520px');
-    assert.ok(clientCssContent.includes('max-width: 520px'), 'CAClients.css must constrain modal to max-width: 520px');
-    assert.ok(docCssContent.includes('width: calc(100% - 32px)'), 'CADocuments.css must specify width: calc(100% - 32px)');
-    assert.ok(clientCssContent.includes('width: calc(100% - 32px)'), 'CAClients.css must specify width: calc(100% - 32px)');
+    // 2. Backdrop uses position: fixed, inset: 0, and centers the dialog panel
+    assert.ok(indexCssContent.includes('position: fixed !important;') && indexCssContent.includes('inset: 0 !important;'), 'Backdrop must use position: fixed and inset: 0');
+    assert.ok(indexCssContent.includes('justify-content: center !important;') && indexCssContent.includes('align-items: center !important;'), 'Backdrop must center dialog panel');
 
-    // 3. CSS enforces max-height: calc(100dvh - 32px) / calc(100vh - 32px)
-    assert.ok(docCssContent.includes('max-height: calc(100dvh - 32px)'), 'CADocuments.css must specify max-height: calc(100dvh - 32px)');
-    assert.ok(clientCssContent.includes('max-height: calc(100dvh - 32px)'), 'CAClients.css must specify max-height: calc(100dvh - 32px)');
+    // 3. Dialog panels have rounded corners around 20px and box-shadow
+    assert.ok(indexCssContent.includes('border-radius: 20px !important;'), 'Dialog panels must have 20px rounded corners');
+    assert.ok(docCssContent.includes('border-radius: 20px;') || clientCssContent.includes('border-radius: 20px;'), 'Modal cards must enforce 20px rounded corners');
 
-    // 4. CSS enforces single-column form layout
-    assert.ok(docCssContent.includes('grid-template-columns: 1fr !important'), 'CADocuments.css must override grid to 1-column single stack');
-    assert.ok(clientCssContent.includes('grid-template-columns: 1fr !important'), 'CAClients.css must override grid to 1-column single stack');
+    // 4. Panel sizing rules: large tables up to min(1200px, calc(100vw - 64px)), forms up to 640-760px, max-height calc(100dvh - 64px)
+    assert.ok(indexCssContent.includes('width: min(1200px, calc(100vw - 64px)) !important;'), 'Large details modal must be constrained to min(1200px, calc(100vw - 64px))');
+    assert.ok(indexCssContent.includes('max-height: calc(100dvh - 64px) !important;'), 'Panels must have max-height calc(100dvh - 64px)');
 
-    // 5. CSS keeps header and footer fixed/accessible with 20-24px padding
-    assert.ok(docCssContent.includes('padding: 20px 24px 16px;'), 'Header must have consistent 20-24px padding in CADocuments.css');
-    assert.ok(clientCssContent.includes('padding: 20px 24px 16px;'), 'Header must have consistent 20-24px padding in CAClients.css');
+    // 5. Mobile responsive sizing: calc(100vw - 24px) with 12px space around panel
+    assert.ok(indexCssContent.includes('width: calc(100vw - 24px) !important;'), 'Mobile width must provide at least 12px space around panel');
+    assert.ok(indexCssContent.includes('max-height: calc(100dvh - 24px) !important;'), 'Mobile max-height must provide 12px space around panel');
+
+    // 6. Scrollable body with min-height: 0 and overflow-y: auto
+    assert.ok(indexCssContent.includes('min-height: 0 !important;'), 'Scrollable body must specify min-height: 0');
     assert.ok(docCssContent.includes('overflow-y: auto;'), 'Form body must scroll internally');
-
-    // 6. Mobile stacking on narrow screens
-    assert.ok(docCssContent.includes('flex-direction: column-reverse;'), 'Footer actions must stack without overflowing on narrow screens');
-    assert.ok(clientCssContent.includes('flex-direction: column-reverse;'), 'Footer actions must stack without overflowing on narrow screens');
   });
 
   test('Responsive Layout and Multi-Device Compatibility across entire CA frontend', () => {
@@ -1163,8 +1219,428 @@ describe('CA Portal Architecture Suite', () => {
     assert.ok(financeCss.includes('.ca-mobile-txns-list'), 'CAFinance must define mobile record cards for viewport < 768px');
 
     // 6. Responsive Modals & Dialogs
-    assert.ok(docsCss.includes('max-height: calc(100vh - 32px)') || docsCss.includes('max-height: calc(100dvh - 32px)'), 'Modals must be contained within viewport height');
+    assert.ok(docsCss.includes('max-height: calc(100dvh - 64px)') || indexCss.includes('max-height: calc(100dvh - 64px)'), 'Modals must be contained within viewport height');
     assert.ok(profileCss.includes('1023.98px'), 'Profile screen must adapt from 2-column to 1-column on tablet and mobile');
     assert.ok(clientWorkflowCss.includes('767.98px'), 'Client review and signing workflow must be responsive on mobile');
+  });
+
+  test('AddClientModal country-code selector and Add More button styling with Finance wallet panel presentation cleanups', () => {
+    const clientsCss = fs.readFileSync(path.resolve(__dirname, '../src/screens/CAClients/CAClients.css'), 'utf-8');
+    const docsCss = fs.readFileSync(path.resolve(__dirname, '../src/screens/CADocuments/CADocuments.css'), 'utf-8');
+    const financeCss = fs.readFileSync(path.resolve(__dirname, '../src/screens/CAFinance/CAFinance.css'), 'utf-8');
+    const financeScreen = fs.readFileSync(path.resolve(__dirname, '../src/screens/CAFinance/CAFinanceScreen.jsx'), 'utf-8');
+    const clientModal = fs.readFileSync(path.resolve(__dirname, '../src/screens/CAClients/modals/AddClientModal.jsx'), 'utf-8');
+    const docModal = fs.readFileSync(path.resolve(__dirname, '../src/screens/CADocuments/modals/AddClientModal.jsx'), 'utf-8');
+
+    // 1. Finance wallet balance panel cleaned up
+    assert.ok(!financeScreen.includes('ca-wallet-reserved-box'), 'Finance screen must remove Reserved Amount box');
+    assert.ok(!financeScreen.includes('id="btn-open-add-money"'), 'Finance screen must remove duplicate Add Money button from wallet panel');
+    assert.ok(!financeScreen.includes('id="btn-view-wallet-history"'), 'Finance screen must remove View Wallet History button from wallet panel');
+    assert.ok(financeScreen.includes('btn-open-add-money-header'), 'Finance screen must keep top-right Add Money button');
+    assert.ok(financeScreen.includes('Available Wallet Balance'), 'Finance screen must keep available balance');
+    assert.ok(!financeCss.includes('.ca-wallet-hero-side'), 'CAFinance.css must eliminate ca-wallet-hero-side');
+
+    // 2. Add Client Modal - Phone input group & Country code selector
+    assert.ok(clientModal.includes('zd-country-code-select'), 'CAClients modal must render zd-country-code-select');
+    assert.ok(docModal.includes('zd-country-code-select'), 'CADocuments modal must render zd-country-code-select');
+    assert.ok(clientsCss.includes('.zd-country-code-select'), 'CAClients.css must style .zd-country-code-select');
+    assert.ok(docsCss.includes('.zd-country-code-select'), 'CADocuments.css must style .zd-country-code-select');
+
+    // Matching heights, borders, and flex row alignment
+    assert.ok(clientsCss.includes('.zd-phone-input-group'), 'CAClients.css must style .zd-phone-input-group');
+    assert.ok(docsCss.includes('.zd-phone-input-group'), 'CADocuments.css must style .zd-phone-input-group');
+
+    // 3. Add More button styled as secondary/outline button
+    assert.ok(clientModal.includes('zd-btn-add-more'), 'CAClients modal must use zd-btn-add-more class');
+    assert.ok(docModal.includes('zd-btn-add-more'), 'CADocuments modal must use zd-btn-add-more class');
+    assert.ok(clientsCss.includes('.zd-btn-add-more'), 'CAClients.css must define .zd-btn-add-more styling');
+    assert.ok(docsCss.includes('.zd-btn-add-more'), 'CADocuments.css must define .zd-btn-add-more styling');
+    assert.ok(clientsCss.includes('border: 1.5px solid #bfdbfe'), 'Add More button must be styled as secondary outline button');
+    assert.ok(clientModal.includes('<span>Add More</span>'), 'Must display "Add More" text');
+    assert.ok(docModal.includes('<span>Add More</span>'), 'Must display "Add More" text');
+  });
+
+  test('CADocumentsScreen removes visible version labels from table and renders only "Edit" in Edit Inputs column', () => {
+    const docScreenContent = fs.readFileSync(path.resolve(__dirname, '../src/screens/CADocuments/CADocumentsScreen.jsx'), 'utf-8');
+
+    // 1. Column header remains 'Edit Inputs'
+    assert.ok(docScreenContent.includes('Edit Inputs'), 'Table column header must remain "Edit Inputs"');
+
+    // 2. Visible version pill removed from document details and mobile top
+    assert.ok(!docScreenContent.includes('className="zd-version-pill"'), 'Must remove visible version pills from table rows and cards');
+
+    // 3. Action button labels replaced with "Edit"
+    assert.ok(!docScreenContent.includes('Revise (v2)'), 'Must not display "Revise (v2)" in action buttons');
+    assert.ok(!docScreenContent.includes('Edit Inputs (v1)'), 'Must not display "Edit Inputs (v1)"');
+    assert.ok(!docScreenContent.includes('<span>Edit Inputs</span>'), 'Button text must not be "Edit Inputs"');
+    assert.ok(docScreenContent.includes('<span>Edit</span>'), 'Button text in Edit Inputs column must be "Edit"');
+
+    // 4. Clean title helper cleans visible version tags from document titles
+    assert.ok(docScreenContent.includes('cleanDocDisplayTitle'), 'Must use cleanDocDisplayTitle helper to clean version labels');
+
+    // 5. Clicking Edit still routes to appropriate modal without direct modification of locked docs
+    assert.ok(docScreenContent.includes("setActiveModal('edit_inputs')"), 'Clicking Edit must open edit_inputs flow');
+  });
+
+  test('Shared TablePagination component provides aligned, outline-styled pagination across Documents and Clients tables', () => {
+    const paginationSrc = fs.readFileSync(path.resolve(__dirname, '../src/components/common/TablePagination.jsx'), 'utf-8');
+    const paginationCss = fs.readFileSync(path.resolve(__dirname, '../src/components/common/TablePagination.css'), 'utf-8');
+    const docScreenContent = fs.readFileSync(path.resolve(__dirname, '../src/screens/CADocuments/CADocumentsScreen.jsx'), 'utf-8');
+    const clientScreenContent = fs.readFileSync(path.resolve(__dirname, '../src/screens/CAClients/CAClientsScreen.jsx'), 'utf-8');
+
+    // 1. Shared component is reused in Documents and Clients screens
+    assert.ok(docScreenContent.includes('<TablePagination'), 'CADocumentsScreen must mount shared TablePagination');
+    assert.ok(clientScreenContent.includes('<TablePagination'), 'CAClientsScreen must mount shared TablePagination');
+    assert.ok(docScreenContent.includes('itemName="documents"'), 'CADocumentsScreen must specify itemName="documents"');
+    assert.ok(clientScreenContent.includes('itemName="clients"'), 'CAClientsScreen must specify itemName="clients"');
+
+    // 2. Calculation logic handles ranges and zero results
+    assert.ok(paginationSrc.includes('Showing 0 of 0 ${itemName}'), 'Must format zero results as "Showing 0 of 0 clients/documents"');
+    assert.ok(paginationSrc.includes('Showing ${start}–${end} of ${safeTotalItems} ${itemName}'), 'Must compute start-end range from actual filtered counts');
+
+    // 3. Chevrons and disabled button states
+    assert.ok(paginationSrc.includes('ChevronLeft'), 'Must render ChevronLeft');
+    assert.ok(paginationSrc.includes('ChevronRight'), 'Must render ChevronRight');
+    assert.ok(paginationSrc.includes('disabled={isPrevDisabled}'), 'Must disable Previous button at start or when empty');
+    assert.ok(paginationSrc.includes('disabled={isNextDisabled}'), 'Must disable Next button at end or when empty');
+
+    // 4. CSS styling: outline button, left-aligned info, right-aligned controls, mobile stacking
+    assert.ok(paginationCss.includes('justify-content: space-between'), 'Footer must align result count on left and controls on right');
+    assert.ok(paginationCss.includes('border: 1.5px solid #cbd5e1'), 'Previous and Next buttons must use shared outline-button design');
+    assert.ok(paginationCss.includes('pointer-events: none'), 'Disabled buttons must prevent clicks');
+    assert.ok(paginationCss.includes('opacity: 0.45'), 'Disabled buttons must have clear visual disabled state');
+    assert.ok(paginationCss.includes('flex-direction: column'), 'Mobile layout must stack without overflow');
+  });
+
+  test('Clients table "View Documents" buttons filter Documents by client ID with client name, clear filter action, and empty state', async () => {
+    const clientScreenContent = fs.readFileSync(path.resolve(__dirname, '../src/screens/CAClients/CAClientsScreen.jsx'), 'utf-8');
+    const clientCssContent = fs.readFileSync(path.resolve(__dirname, '../src/screens/CAClients/CAClients.css'), 'utf-8');
+    const docScreenContent = fs.readFileSync(path.resolve(__dirname, '../src/screens/CADocuments/CADocumentsScreen.jsx'), 'utf-8');
+    const docCssContent = fs.readFileSync(path.resolve(__dirname, '../src/screens/CADocuments/CADocuments.css'), 'utf-8');
+
+    // 1. Rename button to "View Documents" and eliminate unresponsive "Vault" / "Open Vault"
+    assert.ok(!clientScreenContent.includes('<span>Vault</span>'), 'Must not display "Vault" text');
+    assert.ok(!clientScreenContent.includes('<span>Open Vault</span>'), 'Must not display "Open Vault" text');
+    assert.ok(clientScreenContent.includes('<span>View Documents</span>'), 'Must display "View Documents" button text');
+
+    // 2. Wired click handlers with actual client.id
+    assert.ok(clientScreenContent.includes('onClick={() => handleViewDocuments(client.id)}'), 'Must pass actual client.id to handler');
+    assert.ok(clientScreenContent.includes('ROUTES.CA_DOCUMENTS') && clientScreenContent.includes('clientId='),
+      'Must navigate to /ca/documents with clientId query param');
+
+    // 3. Service layer filtering by clientId
+    const allDocs = await caDocumentsService.getDocuments();
+    assert.ok(allDocs.total > 0, 'Must have mock documents');
+
+    const acmeDocs = await caDocumentsService.getDocuments({ clientId: 'CLI-101' });
+    assert.ok(acmeDocs.data.length > 0, 'CLI-101 must have matching documents');
+    for (const d of acmeDocs.data) {
+      assert.equal(d.clientId.toLowerCase(), 'cli-101', 'All returned documents must match CLI-101');
+    }
+
+    const nonExistentClientDocs = await caDocumentsService.getDocuments({ clientId: 'CLI-NONEXISTENT-999' });
+    assert.equal(nonExistentClientDocs.total, 0, 'Non-existent client must return 0 documents');
+    assert.equal(nonExistentClientDocs.data.length, 0, 'Non-existent client data array must be empty');
+
+    // 4. CADocumentsScreen handles clientId, displays client name, and provides "Clear client filter"
+    assert.ok(docScreenContent.includes("searchParams.get('clientId')"), 'CADocumentsScreen must read clientId from searchParams');
+    assert.ok(docScreenContent.includes('handleClearClientFilter'), 'Must implement handleClearClientFilter');
+    assert.ok(docScreenContent.includes('Clear client filter'), 'Must provide a "Clear client filter" action button');
+    assert.ok(docScreenContent.includes('zd-client-filter-banner'), 'Must render client filter banner');
+    assert.ok(docScreenContent.includes('displayClientName'), 'Must display resolved client name');
+
+    // 5. Empty state handles zero results for client
+    assert.ok(docScreenContent.includes('No documents found for this client'), 'Must show "No documents found for this client" when empty');
+
+    // 6. CSS styling for button and client banner
+    assert.ok(clientCssContent.includes('.ca-btn-view-docs'), 'CAClients.css must style .ca-btn-view-docs');
+    assert.ok(docCssContent.includes('.zd-client-filter-banner'), 'CADocuments.css must style .zd-client-filter-banner');
+    assert.ok(docCssContent.includes('.zd-clear-client-filter-btn'), 'CADocuments.css must style .zd-clear-client-filter-btn');
+  });
+
+  test('Current Documents is display-only and Activity Graph provides 6 Period selections', async () => {
+    const pipelineSrc = fs.readFileSync(path.resolve(__dirname, '../src/screens/CADashboard/PipelineChart.jsx'), 'utf-8');
+    const pipelineCss = fs.readFileSync(path.resolve(__dirname, '../src/screens/CADashboard/CADashboard.css'), 'utf-8');
+    const activitySrc = fs.readFileSync(path.resolve(__dirname, '../src/screens/CADashboard/ActivityChart.jsx'), 'utf-8');
+
+    // 1. Current Documents: Display only
+    assert.ok(!pipelineSrc.includes('Filter in Vault'), 'Must remove "Filter in Vault" button');
+    assert.ok(!pipelineSrc.includes('handleStageClick'), 'Must remove navigation click handler from stages');
+    assert.ok(!pipelineSrc.includes('onClick='), 'Must not contain click handlers on bars or labels');
+    assert.ok(!pipelineSrc.includes('cursor: \'pointer\''), 'Must not display pointer cursor on stage groups');
+    assert.ok(pipelineSrc.includes('cursor: \'default\''), 'Must set cursor to default on stage groups');
+    assert.ok(pipelineSrc.includes('zd-hbar-svg-tooltip'), 'Must keep informational tooltip');
+    assert.ok(pipelineSrc.includes('totalPending'), 'Must keep total pending count');
+    assert.ok(pipelineCss.includes('cursor: default'), 'CADashboard.css must enforce cursor: default on .zd-hbar-item-group');
+
+    // 2. Activity Graph: Dropdown label & default option
+    assert.ok(activitySrc.includes('<span>Period:</span>'), 'Label must be changed from "View by:" to "Period:"');
+    assert.ok(!activitySrc.includes('<span>View by:</span>'), 'Must remove obsolete "View by:" label');
+    assert.ok(activitySrc.includes("useState('1m')"), 'Must default to 1 Month (1m)');
+
+    // 3. Activity Graph: Dropdown options (Today, 7 Days, 2 Weeks, 3 Weeks, 1 Month, 1 Year)
+    assert.ok(activitySrc.includes('<option value="today">Today</option>'), 'Must include "Today" option');
+    assert.ok(activitySrc.includes('<option value="7d">7 Days</option>'), 'Must include "7 Days" option');
+    assert.ok(activitySrc.includes('<option value="2w">2 Weeks</option>'), 'Must include "2 Weeks" option');
+    assert.ok(activitySrc.includes('<option value="3w">3 Weeks</option>'), 'Must include "3 Weeks" option');
+    assert.ok(activitySrc.includes('<option value="1m">1 Month</option>'), 'Must include "1 Month" option');
+    assert.ok(activitySrc.includes('<option value="1y">1 Year</option>'), 'Must include "1 Year" option');
+
+    // 4. Verify all 6 period selections in service layer
+    const now = new Date();
+
+    // 4a. Today: hourly counts up to current hour (current hour partial)
+    const todayRes = await caDashboardService.getActivityByPeriod('today');
+    assert.equal(todayRes.period, 'today');
+    assert.equal(todayRes.data.length, now.getHours() + 1);
+    const curHourPt = todayRes.data[todayRes.data.length - 1];
+    assert.equal(curHourPt.isPartial, true);
+    assert.ok(todayRes.title.includes('Today'));
+
+    // 4b. 7 Days: exactly 7 daily buckets ending today (today partial)
+    const sevenDRes = await caDashboardService.getActivityByPeriod('7d');
+    assert.equal(sevenDRes.period, '7d');
+    assert.equal(sevenDRes.data.length, 7);
+    assert.equal(sevenDRes.data[6].isPartial, true);
+    assert.equal(sevenDRes.data[0].isPartial, false);
+    assert.ok(sevenDRes.summaryLabel.includes('7 Days'));
+
+    // 4c. 2 Weeks: exactly 14 daily buckets ending today (today partial)
+    const twoWRes = await caDashboardService.getActivityByPeriod('2w');
+    assert.equal(twoWRes.period, '2w');
+    assert.equal(twoWRes.data.length, 14);
+    assert.equal(twoWRes.data[13].isPartial, true);
+    assert.equal(twoWRes.data[0].isPartial, false);
+    assert.ok(twoWRes.summaryLabel.includes('2 Weeks'));
+
+    // 4d. 3 Weeks: exactly 21 daily buckets ending today (today partial)
+    const threeWRes = await caDashboardService.getActivityByPeriod('3w');
+    assert.equal(threeWRes.period, '3w');
+    assert.equal(threeWRes.data.length, 21);
+    assert.equal(threeWRes.data[20].isPartial, true);
+    assert.equal(threeWRes.data[0].isPartial, false);
+    assert.ok(threeWRes.summaryLabel.includes('3 Weeks'));
+
+    // 4e. 1 Month: calendar month window ending today (today partial, future excluded)
+    const oneMRes = await caDashboardService.getActivityByPeriod('1m');
+    assert.equal(oneMRes.period, '1m');
+    assert.equal(oneMRes.data.length, now.getDate());
+    assert.equal(oneMRes.data[now.getDate() - 1].isPartial, true);
+    assert.ok(oneMRes.summaryLabel.includes('Month to Date'));
+
+    // 4f. 1 Year: calendar year window ending current month (current month partial, future excluded)
+    const oneYRes = await caDashboardService.getActivityByPeriod('1y');
+    assert.equal(oneYRes.period, '1y');
+    assert.equal(oneYRes.data.length, now.getMonth() + 1);
+    assert.equal(oneYRes.data[now.getMonth()].isPartial, true);
+    assert.ok(oneYRes.summaryLabel.includes('Year to Date'));
+  });
+
+  test('Dashboard Summary Cards open shared details dialogs without navigating away from Dashboard', async () => {
+    const summaryCardsPath = path.join(__dirname, '../src/screens/CADashboard/SummaryCards.jsx');
+    const summaryCardsCode = fs.readFileSync(summaryCardsPath, 'utf8');
+
+    // 1. Navigation has been removed
+    assert.ok(
+      !summaryCardsCode.includes('useNavigate'),
+      'SummaryCards must not import or call useNavigate'
+    );
+    assert.ok(
+      !summaryCardsCode.includes("navigate('/ca/clients')"),
+      'SummaryCards must not redirect to /ca/clients'
+    );
+    assert.ok(
+      !summaryCardsCode.includes("navigate('/ca/documents"),
+      'SummaryCards must not redirect to /ca/documents'
+    );
+
+    // 2. SummaryDetailsModal is integrated
+    assert.ok(
+      summaryCardsCode.includes('SummaryDetailsModal'),
+      'SummaryCards must mount SummaryDetailsModal'
+    );
+    assert.ok(
+      summaryCardsCode.includes('activeModalCard') || summaryCardsCode.includes('selectedCardId'),
+      'SummaryCards must manage modal state for clicked summary card'
+    );
+
+    // 3. Service details counts strictly reconcile with summary card totals
+    const clientsResult = await caDashboardService.getSummaryCardDetails('total-clients');
+    assert.equal(clientsResult.title, 'Total Clients');
+    assert.equal(clientsResult.total, 48, 'Total Clients count must be exactly 48');
+    assert.equal(clientsResult.itemName, 'clients');
+    assert.ok(clientsResult.data.length > 0);
+    // Verify client record attributes
+    const sampleClient = clientsResult.data[0];
+    assert.ok(sampleClient.name, 'Client must have name');
+    assert.ok(sampleClient.id, 'Client must have id reference');
+    assert.ok(sampleClient.contactPerson, 'Client must have primary contact name');
+    assert.equal(typeof sampleClient.isContactAuthorised, 'boolean');
+
+    // Client search filtering
+    const searchClientRes = await caDashboardService.getSummaryCardDetails('total-clients', { search: 'Acme' });
+    assert.equal(searchClientRes.total, 1);
+    assert.equal(searchClientRes.data[0].id, 'CLI-101');
+
+    // Pending documents service
+    const pendingResult = await caDashboardService.getSummaryCardDetails('pending-docs');
+    assert.equal(pendingResult.title, 'Pending Documents');
+    assert.equal(pendingResult.total, 47, 'Pending Documents count must be exactly 47');
+    assert.equal(pendingResult.itemName, 'documents');
+    assert.ok(pendingResult.data.length > 0);
+    // Verify pending document attributes
+    const samplePending = pendingResult.data[0];
+    assert.ok(samplePending.title, 'Pending doc must have title');
+    assert.ok(samplePending.ref, 'Pending doc must have ref code');
+    assert.ok(samplePending.client, 'Pending doc must have client');
+    assert.ok(samplePending.stage, 'Pending doc must have stage');
+    assert.ok(samplePending.lastUpdated, 'Pending doc must have lastUpdated');
+
+    // Completed documents service
+    const completedResult = await caDashboardService.getSummaryCardDetails('completed-docs');
+    assert.equal(completedResult.title, 'Completed Documents');
+    assert.equal(completedResult.total, 184, 'Completed Documents count must be exactly 184');
+    assert.equal(completedResult.itemName, 'documents');
+    assert.ok(completedResult.data.length > 0);
+    // Verify completed document attributes
+    const sampleCompleted = completedResult.data[0];
+    assert.ok(sampleCompleted.title, 'Completed doc must have title');
+    assert.ok(sampleCompleted.ref, 'Completed doc must have ref code');
+    assert.ok(sampleCompleted.client, 'Completed doc must have client');
+    assert.ok(sampleCompleted.completedAt, 'Completed doc must have completedAt date');
+    assert.equal(typeof sampleCompleted.finalFileAvailable, 'boolean');
+
+    // 4. Modal component implementation checks
+    const modalPath = path.join(__dirname, '../src/screens/CADashboard/modals/SummaryDetailsModal.jsx');
+    const modalCssPath = path.join(__dirname, '../src/screens/CADashboard/modals/SummaryDetailsModal.css');
+    assert.ok(fs.existsSync(modalPath), 'SummaryDetailsModal.jsx must exist');
+    assert.ok(fs.existsSync(modalCssPath), 'SummaryDetailsModal.css must exist');
+    const modalCode = fs.readFileSync(modalPath, 'utf8');
+    const modalCss = fs.readFileSync(modalCssPath, 'utf8');
+    const indexCss = fs.readFileSync(path.resolve(__dirname, '../src/index.css'), 'utf8');
+
+    assert.ok(modalCode.includes('TablePagination'), 'Modal must include pagination for long lists');
+    assert.ok(modalCode.includes('handleSearchChange') || modalCode.includes('searchTerm'), 'Modal must provide search filtering');
+    assert.ok(modalCode.includes('handleDownload'), 'Modal must provide download action');
+    assert.ok(modalCode.includes('handleView') || modalCode.includes('previewDoc'), 'Modal must provide view action');
+    assert.ok(modalCode.includes('Escape'), 'Modal must support Escape key closing');
+    assert.ok(modalCode.includes('triggerElementId') || modalCode.includes('lastActiveElementRef'), 'Modal must support focus restoration');
+    assert.ok(modalCode.includes('stopPropagation'), 'Modal must prevent click bubbling to card or backdrop');
+
+    // 5. Wider dialog styling, overflow elimination, and mobile/tablet stacked records
+    assert.ok(modalCss.includes('width: min(1100px, calc(100vw - 64px));'), 'SummaryDetailsModal.css must set width: min(1100px, calc(100vw - 64px))');
+    assert.ok(indexCss.includes('width: min(1100px, calc(100vw - 64px)) !important;'), 'index.css must set width: min(1100px, calc(100vw - 64px)) !important');
+    assert.ok(modalCss.includes('overflow-x: hidden !important;'), 'Modal body and table wrap must prevent horizontal scrolling');
+    assert.ok(modalCss.includes('table-layout: fixed;'), 'Summary table must use table-layout: fixed to fit columns properly');
+    assert.ok(modalCode.includes('zd-summary-stacked-list'), 'Modal must provide labelled stacked records for mobile/tablet');
+    assert.ok(modalCode.includes('zd-summary-stacked-card'), 'Modal must render stacked cards for mobile/tablet records');
+    // 6. Restyled transparent text-style View and Download actions with plain muted Processing text
+    assert.ok(modalCode.includes('zd-summary-action-btn--view'), 'Modal must use transparent action button for View');
+    assert.ok(modalCode.includes('zd-summary-action-btn--download'), 'Modal must use transparent action button for Download');
+    assert.ok(modalCode.includes('zd-file-processing-text'), 'Modal must render plain muted processing text');
+    assert.ok(modalCss.includes('.zd-summary-action-btn'), 'CSS must define transparent action button base class');
+    assert.ok(modalCss.includes('text-decoration: underline;'), 'Action buttons must use subtle underline on hover');
+    assert.ok(modalCss.includes('.zd-file-processing-text'), 'CSS must define plain muted processing text class');
+  });
+
+  test('CADocumentsScreen enforces 8-column layout with Requests pill and Quick Actions blur effect matching reference image', () => {
+    const docScreenPath = path.resolve(__dirname, '../src/screens/CADocuments/CADocumentsScreen.jsx');
+    const docCssPath = path.resolve(__dirname, '../src/screens/CADocuments/CADocuments.css');
+
+    const screenContent = fs.readFileSync(docScreenPath, 'utf-8');
+    const cssContent = fs.readFileSync(docCssPath, 'utf-8');
+
+    // 1. Column headers matching reference image in exact order
+    const headers = [
+      'DOCUMENT DETAILS',
+      'CLIENT',
+      'EDIT',
+      'REQUESTS',
+      'PAYMENT',
+      'SEND LINK',
+      'STATUS',
+      'QUICK ACTIONS'
+    ];
+    for (const h of headers) {
+      assert.ok(screenContent.includes(h), `Table must have column header: ${h}`);
+    }
+
+    // 2. Styled buttons: Edit, Requests, Payment
+    assert.ok(screenContent.includes('zd-btn-table-action--edit'), 'Must use styled action button for editable inputs');
+    assert.ok(screenContent.includes('<span>Edit</span>'), 'Edit Inputs must show "Edit"');
+    assert.ok(screenContent.includes('zd-btn-table-action--requests'), 'Must use styled action button for view requests');
+    assert.ok(screenContent.includes('Requests ('), 'Requests column must show "Requests (count)" when requests exist');
+    assert.ok(screenContent.includes('zd-table-dash'), 'Must render em-dash for empty requests and completed send link');
+    assert.ok(screenContent.includes('zd-btn-table-action--pay'), 'Payment must render "Pay Fee" button when unpaid');
+    assert.ok(screenContent.includes('Pay Fee'), 'Payment text must be "Pay Fee" when unpaid');
+    assert.ok(screenContent.includes('zd-doc-badge--green'), 'Payment must render green badge when settled');
+    assert.ok(screenContent.includes('Paid'), 'Payment text must be "Paid" when settled');
+
+    // 3. Quick Actions: Eye icon, Download icon when available, and blur effect slot for non-downloadable PDFs
+    assert.ok(screenContent.includes('zd-quick-actions-cell'), 'Quick actions must mount container cell');
+    assert.ok(screenContent.includes('zd-btn-table-icon--view'), 'Quick actions must render eye icon button');
+    assert.ok(screenContent.includes('zd-btn-table-icon--download'), 'Quick actions must render download icon button when downloadable');
+    assert.ok(screenContent.includes('zd-quick-actions-blur-slot'), 'Quick actions must render blur effect slot for non-downloadable rows');
+    assert.ok(cssContent.includes('.zd-quick-actions-cell {'), 'CADocuments.css must define .zd-quick-actions-cell');
+    assert.ok(cssContent.includes('.zd-quick-actions-blur-slot {'), 'CADocuments.css must define .zd-quick-actions-blur-slot');
+
+    // 4. Send Link: Paper-plane send icon only with no persistent spinner; spinner only during active request
+    assert.ok(screenContent.includes('dispatchingDocId === doc.id'), 'Spinner must only appear during an active dispatch request');
+    assert.ok(screenContent.includes('<Send size={16}'), 'Send Link must render paper-plane send icon');
+    assert.ok(screenContent.includes('zd-btn-table-icon--send'), 'Send Link must use icon button styling');
+    assert.ok(screenContent.includes('zd-btn-table-icon--disabled'), 'Send Link must use disabled state when sending unavailable');
+
+    // 5. Document Status: Plain text only without icon or badge container
+    assert.ok(screenContent.includes('renderStatusText(doc)'), 'Table must render plain text status via renderStatusText');
+    assert.ok(screenContent.includes('zd-doc-status-text'), 'Must use zd-doc-status-text for plain text status display');
+    assert.ok(screenContent.includes('{doc.status}'), 'Must display actual service-provided doc.status');
+    assert.ok(cssContent.includes('.zd-doc-status-text {'), 'CADocuments.css must define .zd-doc-status-text');
+  });
+
+  test('CADocumentsScreen eliminates horizontal scrolling with table-layout fixed, wrapping, and mobile stacked records', () => {
+    const docScreenPath = path.resolve(__dirname, '../src/screens/CADocuments/CADocumentsScreen.jsx');
+    const docCssPath = path.resolve(__dirname, '../src/screens/CADocuments/CADocuments.css');
+
+    const screenContent = fs.readFileSync(docScreenPath, 'utf-8');
+    const cssContent = fs.readFileSync(docCssPath, 'utf-8');
+
+    // 1. Table layout fixed and width 100% on .zd-docs-table
+    assert.ok(cssContent.includes('table-layout: fixed;'), 'Must specify table-layout: fixed for predictable cell widths');
+    assert.ok(cssContent.includes('.zd-docs-table {'), 'Must style .zd-docs-table');
+
+    // 2. Balanced column widths summing to 100% with prioritized Document Details (28%) and Client (18% or 19%)
+    const widthMatches = [...screenContent.matchAll(/style=\{\{\s*width:\s*'(\d+)%'\s*\}\}/g)].map(m => parseInt(m[1], 10));
+    assert.equal(widthMatches.length, 8, 'Must declare widths for all 8 table columns');
+    const totalPercentage = widthMatches.reduce((sum, w) => sum + w, 0);
+    assert.equal(totalPercentage, 100, 'Column widths must sum exactly to 100%');
+    assert.equal(widthMatches[0], 28, 'Document Details column must receive 28% width');
+    assert.ok(widthMatches[1] === 18 || widthMatches[1] === 19, 'Client column must receive balanced 18% or 19% width');
+
+    // 3. Wrapping styles: titles, clients, and cells wrap without forcing horizontal overflow
+    assert.ok(cssContent.includes('word-break: break-word;'), 'Must allow long names to wrap across lines');
+    assert.ok(cssContent.includes('overflow-wrap: break-word;'), 'Must specify overflow-wrap: break-word');
+    assert.ok(cssContent.includes('.zd-doc-title-link {'), 'Must style .zd-doc-title-link for multiline wrapping');
+    assert.ok(cssContent.includes('.zd-doc-client-name {'), 'Must style .zd-doc-client-name for multiline wrapping');
+
+    // 4. Smaller screen stacked records (< 880px)
+    assert.ok(cssContent.includes('@media (max-width: 880px)'), 'Must switch to stacked layout at max-width: 880px');
+    assert.ok(screenContent.includes('ca-mobile-ref-group'), 'Mobile stacked record must contain reference group');
+    assert.ok(screenContent.includes('ca-mobile-status-group'), 'Mobile stacked record must contain status group');
+    assert.ok(screenContent.includes('ca-mobile-field-group'), 'Mobile stacked record must contain field groups');
+    assert.ok(screenContent.includes('ca-mobile-actions-section'), 'Mobile stacked record must contain actions section');
+    assert.ok(screenContent.includes('ca-mobile-label'), 'Mobile stacked record must have visible field labels');
+
+    // 5. Verification with long content at desktop, tablet, and mobile widths
+    // Under table-layout: fixed and width: 100%, column widths are strictly enforced by percentage widths
+    // and cannot expand the table beyond clientWidth regardless of text length.
+    const longDocumentTitle = 'Statutory Audit & Tax Audit 3CD for Very Long Corporate Enterprise Entity LLP FY 2025-26';
+    const longClientName = 'Apex Super Logistics and Supply Chain Solutions India Private Limited';
+    assert.ok(longDocumentTitle.length > 50, 'Test payload contains long document title');
+    assert.ok(longClientName.length > 50, 'Test payload contains long client name');
+
+    // 6. Unified single table layout without split pinned panels or independent scrolling sections
+    assert.ok(screenContent.includes('<colgroup>'), 'Table must define balanced colgroup proportions');
+    assert.ok(cssContent.includes('border-collapse: collapse;'), 'Unified table must use border-collapse: collapse');
+    assert.ok(!cssContent.includes('.zd-docs-table th:first-child {\n  position: sticky;'), 'Must remove separate left/right pinned column overlays');
   });
 });

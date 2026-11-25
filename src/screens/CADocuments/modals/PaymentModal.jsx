@@ -12,9 +12,11 @@ import {
   Receipt,
   ArrowRight,
   ShieldCheck,
-  Info
+  Info,
+  Plus
 } from 'lucide-react';
 import { caBillingService, formatINR } from '../../../services/api/caBillingService.js';
+import AddMoneyModal from '../../CAFinance/modals/AddMoneyModal.jsx';
 
 export default function PaymentModal({ isOpen, onClose, documentId, onPaymentSuccess }) {
   const [quote, setQuote] = useState(null);
@@ -29,6 +31,7 @@ export default function PaymentModal({ isOpen, onClose, documentId, onPaymentSuc
   const [step, setStep] = useState('quote');
   const [isProcessing, setIsProcessing] = useState(false);
   const [settlementResult, setSettlementResult] = useState(null);
+  const [isAddMoneyOpen, setIsAddMoneyOpen] = useState(false);
 
   const modalRef = useRef(null);
 
@@ -87,8 +90,26 @@ export default function PaymentModal({ isOpen, onClose, documentId, onPaymentSuc
   if (!isOpen) return null;
 
   const totalPaise = quote?.totalPayablePaise || 0;
+  const availableBalancePaise = wallet?.availableBalancePaise || 0;
   const isWalletInsufficient =
-    paymentMethod === 'wallet' && wallet && wallet.availableBalancePaise < totalPaise;
+    paymentMethod === 'wallet' && wallet && availableBalancePaise < totalPaise;
+  const shortfallPaise = Math.max(0, totalPaise - availableBalancePaise);
+  const shortfallRupees = Math.ceil(shortfallPaise / 100);
+
+  // Return loop from top-up: updates wallet, keeps user on checkout, requires explicit confirmation
+  const handleTopUpSuccessInCheckout = async (newTxn, newBalancePaise) => {
+    try {
+      const refreshedWallet = await caBillingService.getWalletBalance();
+      setWallet(refreshedWallet);
+    } catch {
+      if (wallet && newBalancePaise !== undefined) {
+        setWallet({ ...wallet, availableBalancePaise: newBalancePaise });
+      }
+    }
+    setPaymentMethod('wallet');
+    setIsAddMoneyOpen(false);
+    setError('');
+  };
 
   const handlePay = async (e) => {
     if (e) e.preventDefault();
@@ -147,7 +168,6 @@ export default function PaymentModal({ isOpen, onClose, documentId, onPaymentSuc
         className="zd-modal-card zd-glass-card zd-payment-modal-card"
         onClick={(e) => e.stopPropagation()}
         ref={modalRef}
-        style={{ maxWidth: 640 }}
       >
         {/* Modal Header */}
         <div className="zd-modal-header">
@@ -196,10 +216,10 @@ export default function PaymentModal({ isOpen, onClose, documentId, onPaymentSuc
             </div>
           </div>
         ) : (
-          <div className="zd-payment-modal-body">
+          <div className="zd-modal-body zd-payment-modal-body">
             {/* STEP 1: Order Summary & Payment Method Selection */}
             {step === 'quote' && (
-              <form onSubmit={handlePay}>
+              <form onSubmit={handlePay} className="zd-modal-form zd-payment-form">
                 {/* Already Paid & Status Banners */}
                 {quote?.isPaid && (
                   <div
@@ -306,6 +326,38 @@ export default function PaymentModal({ isOpen, onClose, documentId, onPaymentSuc
                       <div className={`zd-radio-dot ${paymentMethod === 'wallet' ? 'checked' : ''}`} />
                     </div>
 
+                    {/* Insufficient Wallet Shortfall Banner & Add Money Shortcut */}
+                    {paymentMethod === 'wallet' && isWalletInsufficient && (
+                      <div className="zd-wallet-shortfall-card" style={{ background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 10, padding: 12, marginTop: -2, marginBottom: 4 }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                          <AlertCircle size={16} color="#d97706" style={{ flexShrink: 0, marginTop: 2 }} />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <strong style={{ fontSize: 13, color: '#92400e' }}>
+                                Wallet Shortfall: {formatINR(shortfallPaise)}
+                              </strong>
+                              <span style={{ fontSize: 11, color: '#b45309', fontWeight: 600 }}>
+                                Required: {formatINR(totalPaise)}
+                              </span>
+                            </div>
+                            <p style={{ margin: '4px 0 8px', fontSize: 12, color: '#78350f', lineHeight: 1.45 }}>
+                              Available: {formatINR(availableBalancePaise)}. Top up your wallet to continue this checkout without re-entering document details.
+                            </p>
+                            <button
+                              type="button"
+                              id="btn-checkout-add-money"
+                              className="zd-btn-action zd-btn-action--primary"
+                              style={{ fontSize: 12, padding: '5px 12px' }}
+                              onClick={() => setIsAddMoneyOpen(true)}
+                            >
+                              <Plus size={14} />
+                              <span>Top Up {formatINR(shortfallPaise)} & Return</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Method 2: UPI */}
                     <div
                       className={`zd-payment-method-item ${paymentMethod === 'upi' ? 'selected' : ''}`}
@@ -371,7 +423,7 @@ export default function PaymentModal({ isOpen, onClose, documentId, onPaymentSuc
                 </div>
 
                 {/* Modal Footer Actions */}
-                <div className="zd-modal-actions" style={{ marginTop: 18 }}>
+                <div className="zd-modal-actions" style={{ marginTop: 'auto', flexShrink: 0, paddingTop: 18 }}>
                   <button type="button" className="zd-btn-action zd-btn-action--secondary" onClick={onClose}>
                     Cancel
                   </button>
@@ -507,6 +559,15 @@ export default function PaymentModal({ isOpen, onClose, documentId, onPaymentSuc
           </div>
         )}
       </div>
+
+      {/* Top-up Modal with Shortfall Preset & Return Loop */}
+      <AddMoneyModal
+        isOpen={isAddMoneyOpen}
+        onClose={() => setIsAddMoneyOpen(false)}
+        onSuccess={handleTopUpSuccessInCheckout}
+        currentBalancePaise={availableBalancePaise}
+        initialAmount={Math.max(500, Math.ceil(shortfallRupees / 500) * 500)}
+      />
     </div>
   );
 }

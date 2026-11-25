@@ -17,6 +17,7 @@ export const caDocumentsService = {
     status = 'ALL',
     docType = 'ALL',
     dateRange = 'ALL',
+    clientId = null,
     page = 1,
     limit = 10
   } = {}) => {
@@ -26,6 +27,7 @@ export const caDocumentsService = {
         status,
         docType,
         dateRange,
+        clientId,
         page,
         limit
       });
@@ -38,6 +40,13 @@ export const caDocumentsService = {
 
     // Filter in-memory prototype records
     let result = [...localDocumentsStore];
+
+    // Client ID filter (exact match on doc.clientId)
+    if (clientId) {
+      result = result.filter(
+        (doc) => String(doc.clientId || '').toLowerCase() === String(clientId).toLowerCase()
+      );
+    }
 
     // Search query matching title, ref, or client
     if (search && search.trim()) {
