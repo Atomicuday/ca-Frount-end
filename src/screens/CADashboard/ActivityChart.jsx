@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { TrendingUp, RefreshCw } from 'lucide-react';
 import { caDashboardService } from '../../services/api/caDashboardService.js';
 
@@ -25,15 +25,15 @@ export default function ActivityChart() {
     loadActivityData(period, false);
   }, [period, loadActivityData]);
 
-  // SVG Geometry calculations
+  // SVG Geometry calculations: generous margins so all points, markers, and badges stay safely inside container
   const viewBoxWidth = 640;
-  const viewBoxHeight = 220;
-  const startX = 52;
-  const endX = 604;
-  const topY = 36;
-  const baselineY = 188;
-  const widthSpan = endX - startX; // 552px
-  const heightSpan = baselineY - topY; // 152px
+  const viewBoxHeight = 225;
+  const startX = 46;
+  const endX = 588; // 52px of right margin so final badge and labels never crowd the border
+  const topY = 46; // 46px of top margin so value badges have ample clearance at peaks
+  const baselineY = 184;
+  const widthSpan = endX - startX; // 542px
+  const heightSpan = baselineY - topY; // 138px
 
   const points = activityPayload?.data || [];
   const validCounts = points
@@ -89,6 +89,69 @@ export default function ActivityChart() {
 
   const activePoint = hoveredIndex !== null ? mappedPoints[hoveredIndex] : null;
   const totalCompleted = validCounts.reduce((a, b) => a + b, 0);
+
+  // Helper to resolve actual date text instead of "Today" on x-axis ticks
+  const getDisplayLabel = (pt) => {
+    if (pt.label && pt.label !== 'Today') return pt.label;
+    if (pt.dateStr) {
+      const d = new Date(pt.dateStr);
+      if (!isNaN(d.getTime())) {
+        const pad2 = (n) => String(n).padStart(2, '0');
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        return `${pad2(d.getDate())} ${months[d.getMonth()]}`;
+      }
+    }
+    return pt.label;
+  };
+
+  // Visible X-axis tick indices: responsively thinned to prevent label collisions, always showing the final tick
+  const visibleTickIndices = useMemo(() => {
+    if (totalPoints <= 1) return new Set([0]);
+
+    if (period === '7d' || period === '1y') {
+      return new Set(Array.from({ length: totalPoints }, (_, i) => i));
+    }
+
+    if (period === 'today') {
+      const step = totalPoints <= 8 ? 1 : totalPoints <= 14 ? 2 : 3;
+      const set = new Set();
+      for (let i = totalPoints - 1; i >= 0; i -= step) {
+        set.add(i);
+      }
+      if (!set.has(0)) {
+        const earliest = Math.min(...set);
+        if (earliest <= 1) {
+          set.delete(earliest);
+          set.add(0);
+        } else {
+          set.add(0);
+        }
+      }
+      return set;
+    }
+
+    // Daily periods (2w, 3w, 1m, day): target 5 to 6 evenly spaced ticks to guarantee >80px spacing
+    const targetTicks = totalPoints <= 12 ? 5 : 6;
+    const step = Math.max(2, Math.round((totalPoints - 1) / (targetTicks - 1)));
+
+    const set = new Set();
+    // Step backwards from the final point (current date) so final tick is guaranteed
+    for (let i = totalPoints - 1; i >= 0; i -= step) {
+      set.add(i);
+    }
+
+    const earliest = Math.min(...set);
+    if (earliest !== 0) {
+      if (earliest <= Math.floor(step * 0.7)) {
+        set.delete(earliest);
+        set.add(0);
+      } else {
+        set.add(0);
+      }
+    }
+
+    return set;
+  }, [totalPoints, period]);
 
   return (
     <div className="zd-analytics-card zd-glass-card" id="card-activity-trend" style={{ minHeight: 290 }}>
@@ -169,7 +232,7 @@ export default function ActivityChart() {
               </linearGradient>
 
               <filter id="activityBadgeShadow" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="2" stdDeviation="2.5" floodColor="#2563eb" floodOpacity="0.35" />
+                <feDropShadow dx="0" dy="2" stdDeviation="2.5" floodColor="#d97706" floodOpacity="0.28" />
               </filter>
             </defs>
 
@@ -179,7 +242,7 @@ export default function ActivityChart() {
               return (
                 <g key={`${tick}-${i}`} className="zd-trend-grid-row">
                   <text
-                    x={startX - 14}
+                    x={startX - 12}
                     y={yPos + 3.5}
                     textAnchor="end"
                     fontSize="11"
@@ -192,7 +255,7 @@ export default function ActivityChart() {
                   <line
                     x1={startX - 6}
                     y1={yPos}
-                    x2={endX + 10}
+                    x2={endX + 8}
                     y2={yPos}
                     stroke="rgba(226, 232, 240, 0.75)"
                     strokeDasharray="3 3"
@@ -229,24 +292,8 @@ export default function ActivityChart() {
               {mappedPoints.map((pt, idx) => {
                 const isHovered = hoveredIndex === idx;
                 const isPartial = pt.isPartial;
-
-                // Smart X-axis label filtering to avoid crowding on dense intervals
-                const shouldShowXLabel = (() => {
-                  if (period === '7d' || period === '1y') return true;
-                  if (period === 'today') {
-                    return totalPoints <= 12 ? true : (idx === 0 || idx === totalPoints - 1 || idx % 2 === 0);
-                  }
-                  if (period === '2w') {
-                    return idx === 0 || idx === totalPoints - 1 || idx % 2 === 0;
-                  }
-                  if (period === '3w') {
-                    return idx === 0 || idx === totalPoints - 1 || idx % 3 === 0;
-                  }
-                  if (period === '1m') {
-                    return idx === 0 || idx === totalPoints - 1 || idx % 4 === 0;
-                  }
-                  return idx === 0 || idx === totalPoints - 1 || idx % 4 === 0;
-                })();
+                const shouldShowXLabel = visibleTickIndices.has(idx);
+                const displayLabel = getDisplayLabel(pt);
 
                 return (
                   <g
@@ -261,7 +308,7 @@ export default function ActivityChart() {
                       fill="transparent"
                       tabIndex="0"
                       role="img"
-                      aria-label={`${pt.label}: ${pt.count} completed documents${isPartial ? ' (Partial in progress)' : ''}`}
+                      aria-label={`${displayLabel}: ${pt.count} completed documents${isPartial ? ' (Partial in progress)' : ''}`}
                       onFocus={() => setHoveredIndex(idx)}
                       onBlur={() => setHoveredIndex(null)}
                       onMouseEnter={() => setHoveredIndex(idx)}
@@ -289,12 +336,12 @@ export default function ActivityChart() {
                         x={pt.x}
                         y={baselineY + 18}
                         textAnchor="middle"
-                        fontSize={isPartial ? '12.5' : totalPoints > 20 ? '10.5' : '11.5'}
-                        fontWeight={isPartial ? '800' : '600'}
-                        fill={isPartial ? '#2563eb' : '#475569'}
+                        fontSize={isPartial ? '11.5' : totalPoints > 20 ? '10.5' : '11'}
+                        fontWeight={isPartial ? '700' : '600'}
+                        fill={isPartial ? '#1d4ed8' : '#475569'}
                         fontFamily="inherit"
                       >
-                        {pt.label}
+                        {displayLabel}
                       </text>
                     )}
                   </g>
@@ -316,16 +363,31 @@ export default function ActivityChart() {
                 }
 
                 if (isPartial) {
+                  const badgeW = 38;
+                  const badgeH = 20;
+                  // Ensure badge remains comfortably inside the top boundary
+                  const badgeY = Math.max(8, pt.y - 34);
+                  // Ensure pointer arrow tip points to top of the circle marker with clear spacing
+                  const arrowTipY = pt.y - 9;
+                  const arrowBaseY = Math.min(arrowTipY - 2, badgeY + badgeH);
+
                   return (
                     <g key={idx} className="zd-trend-latest-group" filter="url(#activityBadgeShadow)">
-                      <rect x={pt.x - 20} y={pt.y - 36} width="40" height="20" rx="6" fill="#f59e0b" />
+                      <rect
+                        x={pt.x - badgeW / 2}
+                        y={badgeY}
+                        width={badgeW}
+                        height={badgeH}
+                        rx="6"
+                        fill="#f59e0b"
+                      />
                       <polygon
-                        points={`${pt.x - 4.5},${pt.y - 16} ${pt.x + 4.5},${pt.y - 16} ${pt.x},${pt.y - 12}`}
+                        points={`${pt.x - 4.5},${arrowBaseY} ${pt.x + 4.5},${arrowBaseY} ${pt.x},${arrowTipY}`}
                         fill="#f59e0b"
                       />
                       <text
                         x={pt.x}
-                        y={pt.y - 26}
+                        y={badgeY + badgeH / 2 + 0.5}
                         textAnchor="middle"
                         dominantBaseline="middle"
                         fontSize="11.5"
@@ -343,9 +405,9 @@ export default function ActivityChart() {
                   <g key={idx} className="zd-trend-val-badge">
                     <rect
                       x={pt.x - 14}
-                      y={pt.y - 30}
-                      width="28"
-                      height="18"
+                      y={Math.max(6, pt.y - 30)}
+                      width={28}
+                      height={18}
                       rx="5"
                       fill="#f8fafc"
                       stroke="rgba(226, 232, 240, 0.9)"
@@ -353,7 +415,7 @@ export default function ActivityChart() {
                     />
                     <text
                       x={pt.x}
-                      y={pt.y - 20.5}
+                      y={Math.max(6, pt.y - 30) + 9}
                       textAnchor="middle"
                       dominantBaseline="middle"
                       fontSize="10.5"
@@ -370,18 +432,35 @@ export default function ActivityChart() {
 
             {/* Interactive SVG Tooltip */}
             {activePoint && (() => {
-              const pointDate = activePoint.fullDateLabel || activePoint.dateStr || activePoint.label;
-              const tooltipText = `${pointDate} · ${activePoint.count} Completed${
-                activePoint.isPartial ? ' (In Progress)' : ''
-              }`;
-              const tooltipWidth = Math.min(290, tooltipText.length * 7.5 + 24);
+              const isTodayPoint =
+                activePoint.isToday ||
+                (activePoint.isPartial &&
+                  period !== 'today' &&
+                  period !== '1y' &&
+                  period !== 'year');
+
+              const baseDate = activePoint.fullDateLabel || activePoint.dateStr || activePoint.label;
+              const dateText = isTodayPoint ? `${baseDate} (Today)` : baseDate;
+
+              const statusText = activePoint.isPartial
+                ? period === 'today'
+                  ? ' · In Progress'
+                  : ' · In Progress (Partial)'
+                : '';
+
+              const tooltipText = `${dateText} — ${activePoint.count} Completed${statusText}`;
+              const tooltipWidth = Math.min(320, Math.max(160, tooltipText.length * 6.8 + 24));
               const tooltipHeight = 32;
+
+              // Clamp X so tooltip never clips left or right
               const tooltipX = Math.max(
                 startX - 10,
-                Math.min(activePoint.x - tooltipWidth / 2, endX + 10 - tooltipWidth)
+                Math.min(activePoint.x - tooltipWidth / 2, viewBoxWidth - tooltipWidth - 14)
               );
+
               const pointY = activePoint.y !== null ? activePoint.y : baselineY;
-              const tooltipY = pointY < 70 ? pointY + 16 : pointY - tooltipHeight - 12;
+              // If point is high near top, show tooltip below; otherwise show above badge
+              const tooltipY = pointY < topY + 44 ? pointY + 18 : Math.max(6, pointY - tooltipHeight - 38);
 
               return (
                 <g className="zd-trend-svg-tooltip" pointerEvents="none" role="tooltip">
@@ -419,8 +498,8 @@ export default function ActivityChart() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2563eb', display: 'inline-block' }} />
           <span style={{ color: '#475569', fontSize: 11.5, fontWeight: 500 }}>Completed Period</span>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f59e0b', marginLeft: 12, display: 'inline-block' }} />
-          <span style={{ color: '#475569', fontSize: 11.5, fontWeight: 500 }}>* In Progress (Partial)</span>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f59e0b', marginLeft: 14, display: 'inline-block' }} />
+          <span style={{ color: '#475569', fontSize: 11.5, fontWeight: 500 }}>* In Progress (Partial Period)</span>
         </div>
         <span style={{ color: '#64748b' }}>
           {activityPayload?.summaryLabel || 'Practice Activity'} • Real statutory completion receipts

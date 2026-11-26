@@ -1441,6 +1441,16 @@ describe('CA Portal Architecture Suite', () => {
     assert.equal(oneYRes.data.length, now.getMonth() + 1);
     assert.equal(oneYRes.data[now.getMonth()].isPartial, true);
     assert.ok(oneYRes.summaryLabel.includes('Year to Date'));
+
+    // 5. Final data point layout & responsive tick thinning
+    assert.ok(activitySrc.includes('visibleTickIndices'), 'Must implement responsive visible tick indices');
+    assert.ok(activitySrc.includes('getDisplayLabel'), 'Must resolve actual date tick labels');
+    assert.ok(activitySrc.includes('(Today)'), 'Must include Today in tooltip for current date');
+    assert.ok(activitySrc.includes('endX = 588'), 'Must add generous chart right margin');
+    assert.ok(activitySrc.includes('topY = 46'), 'Must add generous chart top margin for badges');
+    assert.ok(!sevenDRes.data[6].label.includes('Today'), 'Final x-axis tick in 7d must be formatted as date, not "Today"');
+    assert.ok(!oneMRes.data[now.getDate() - 1].label.includes('Today'), 'Final x-axis tick in 1m must be formatted as date, not "Today"');
+    assert.equal(oneMRes.data[now.getDate() - 1].isToday, true);
   });
 
   test('Dashboard Summary Cards open shared details dialogs without navigating away from Dashboard', async () => {

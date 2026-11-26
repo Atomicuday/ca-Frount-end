@@ -958,7 +958,7 @@
 .zd-trend-svg-container {
   width: 100%;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .zd-trend-svg {

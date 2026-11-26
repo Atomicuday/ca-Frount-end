@@ -218,13 +218,14 @@ export const caDashboardService = {
       for (let i = 6; i >= 0; i--) {
         const d = new Date(currentYear, currentMonth, todayDate - i);
         const isToday = i === 0;
-        const label = isToday ? 'Today' : `${pad2(d.getDate())} ${MONTHS_SHORT[d.getMonth()]}`;
+        const label = `${pad2(d.getDate())} ${MONTHS_SHORT[d.getMonth()]}`;
         const count = getDailyCount(d, isToday);
 
         items.push({
           label,
           dateStr: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`,
           count,
+          isToday,
           isPartial: isToday,
           ...(isToday ? { partialLabel: 'Today (In Progress)' } : {}),
           fullDateLabel: `${pad2(d.getDate())} ${MONTHS_FULL[d.getMonth()]} ${d.getFullYear()}`
@@ -250,13 +251,14 @@ export const caDashboardService = {
       for (let i = 13; i >= 0; i--) {
         const d = new Date(currentYear, currentMonth, todayDate - i);
         const isToday = i === 0;
-        const label = isToday ? 'Today' : `${pad2(d.getDate())} ${MONTHS_SHORT[d.getMonth()]}`;
+        const label = `${pad2(d.getDate())} ${MONTHS_SHORT[d.getMonth()]}`;
         const count = getDailyCount(d, isToday);
 
         items.push({
           label,
           dateStr: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`,
           count,
+          isToday,
           isPartial: isToday,
           ...(isToday ? { partialLabel: 'Today (In Progress)' } : {}),
           fullDateLabel: `${pad2(d.getDate())} ${MONTHS_FULL[d.getMonth()]} ${d.getFullYear()}`
@@ -282,13 +284,14 @@ export const caDashboardService = {
       for (let i = 20; i >= 0; i--) {
         const d = new Date(currentYear, currentMonth, todayDate - i);
         const isToday = i === 0;
-        const label = isToday ? 'Today' : `${pad2(d.getDate())} ${MONTHS_SHORT[d.getMonth()]}`;
+        const label = `${pad2(d.getDate())} ${MONTHS_SHORT[d.getMonth()]}`;
         const count = getDailyCount(d, isToday);
 
         items.push({
           label,
           dateStr: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`,
           count,
+          isToday,
           isPartial: isToday,
           ...(isToday ? { partialLabel: 'Today (In Progress)' } : {}),
           fullDateLabel: `${pad2(d.getDate())} ${MONTHS_FULL[d.getMonth()]} ${d.getFullYear()}`
@@ -379,7 +382,7 @@ export const caDashboardService = {
     for (let dayNum = 1; dayNum <= todayDate; dayNum++) {
       const d = new Date(currentYear, currentMonth, dayNum);
       const isToday = dayNum === todayDate;
-      const label = isToday ? 'Today' : `${pad2(dayNum)} ${MONTHS_SHORT[currentMonth]}`;
+      const label = `${pad2(dayNum)} ${MONTHS_SHORT[currentMonth]}`;
       const count = getDailyCount(d, isToday);
 
       items.push({
@@ -387,6 +390,7 @@ export const caDashboardService = {
         dayNum,
         dateStr: `${currentYear}-${pad2(currentMonth + 1)}-${pad2(dayNum)}`,
         count,
+        isToday,
         isPartial: isToday,
         ...(isToday ? { partialLabel: 'Today (In Progress)' } : {}),
         fullDateLabel: `${pad2(dayNum)} ${MONTHS_FULL[currentMonth]} ${currentYear}`
