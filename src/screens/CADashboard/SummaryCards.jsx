@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Users, Clock, CheckCircle2 } from 'lucide-react';
+import { Users, Clock, CheckCircle2, Landmark } from 'lucide-react';
 import SummaryDetailsModal from './modals/SummaryDetailsModal.jsx';
+import StateStampDutyModal from './modals/StateStampDutyModal.jsx';
 
 export default function SummaryCards({ summary = {} }) {
   const [activeModalCard, setActiveModalCard] = useState(null);
@@ -14,6 +15,7 @@ export default function SummaryCards({ summary = {} }) {
       id: 'total-clients',
       label: 'Total Clients',
       count: totalClients,
+      isTextCount: false,
       definition: 'Current client count in vault',
       subNote: 'Distinct active entity profiles',
       pillText: 'Vault Total',
@@ -26,6 +28,7 @@ export default function SummaryCards({ summary = {} }) {
       id: 'pending-docs',
       label: 'Pending Documents',
       count: pendingDocuments,
+      isTextCount: false,
       definition: 'Active, unfinished documents in pipeline',
       subNote: 'Drafts, info, review, payment & execution',
       pillText: 'Active Backlog',
@@ -38,6 +41,7 @@ export default function SummaryCards({ summary = {} }) {
       id: 'completed-docs',
       label: 'Completed Documents',
       count: completedDocuments,
+      isTextCount: false,
       definition: 'All successfully completed documents',
       subNote: 'Legally stamped & executed vault copies',
       pillText: 'All-Time Executed',
@@ -45,6 +49,19 @@ export default function SummaryCards({ summary = {} }) {
       theme: 'green',
       stroke1: '#34d399',
       stroke2: '#059669'
+    },
+    {
+      id: 'state-stamp-duty',
+      label: 'State Stamp Duty',
+      count: 'View Rates',
+      isTextCount: true,
+      definition: 'Check duty by state and document type',
+      subNote: 'Official statutory schedules & calculator',
+      pillText: 'Statutory Rates',
+      icon: Landmark,
+      theme: 'purple',
+      stroke1: '#a78bfa',
+      stroke2: '#7c3aed'
     }
   ];
 
@@ -61,7 +78,7 @@ export default function SummaryCards({ summary = {} }) {
 
   return (
     <section aria-label="CA Practice Summary Metrics" className="zd-summary-cards-section">
-      <div className="zd-summary-cards-grid zd-summary-cards-grid--three">
+      <div className="zd-summary-cards-grid zd-summary-cards-grid--four">
         {cards.map((card) => {
           const Icon = card.icon;
           return (
@@ -130,7 +147,9 @@ export default function SummaryCards({ summary = {} }) {
               </div>
 
               <div className="zd-resource-body">
-                <span className="zd-resource-count">{card.count}</span>
+                <span className={`zd-resource-count ${card.isTextCount ? 'zd-resource-count--text' : ''}`}>
+                  {card.count}
+                </span>
                 <h3 className="zd-resource-label">{card.label}</h3>
                 <p className="zd-resource-def">{card.definition}</p>
                 {card.subNote && <span className="zd-resource-subnote">{card.subNote}</span>}
@@ -140,9 +159,16 @@ export default function SummaryCards({ summary = {} }) {
         })}
       </div>
 
-      {/* Shared Summary Details Modal */}
+      {/* State Stamp Duty Reference Modal */}
+      <StateStampDutyModal
+        isOpen={activeModalCard === 'state-stamp-duty'}
+        onClose={() => setActiveModalCard(null)}
+        triggerElementId="summary-card-state-stamp-duty"
+      />
+
+      {/* Shared Summary Details Modal (for clients and documents) */}
       <SummaryDetailsModal
-        isOpen={Boolean(activeModalCard)}
+        isOpen={Boolean(activeModalCard && activeModalCard !== 'state-stamp-duty')}
         cardId={activeModalCard}
         onClose={() => setActiveModalCard(null)}
         triggerElementId={activeModalCard ? `summary-card-${activeModalCard}` : undefined}

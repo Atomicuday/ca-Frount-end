@@ -4,7 +4,7 @@ Chartered Accountants Practice Management, Tax Filings, Client Vault & Complianc
 
 ## Architecture Overview
 
-Built using the exact architectural patterns and glassmorphism design system established in `ZapDocs-Realestate-FE`, adapted specifically for Chartered Accountants:
+Built using modern React architectural patterns and the ZapDocs glassmorphism design system, tailored specifically for Chartered Accountants:
 
 - **Framework**: React 19 + Vite 8
 - **Routing & Layout**: `react-router-dom` (v7) with `CALayout`, desktop tab pills, and mobile slide-out navigation drawer

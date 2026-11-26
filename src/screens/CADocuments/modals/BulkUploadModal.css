@@ -1,0 +1,692 @@
+/* ==========================================================================
+   ZapDocs CA Portal – Bulk Client & Document Upload Modal Styles
+   Centered, responsive 6-step wizard with glassmorphism styling
+   ========================================================================== */
+
+/* Overlay */
+.zd-bulk-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 24px;
+  box-sizing: border-box;
+  animation: zdModalFadeIn 0.18s ease-out;
+}
+
+/* Modal Panel */
+.zd-bulk-modal-panel {
+  width: 100%;
+  max-width: 860px;
+  max-height: calc(100dvh - 48px);
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow:
+    0 24px 48px -12px rgba(15, 23, 42, 0.22),
+    0 0 0 1px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+  animation: zdModalSlideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Header */
+.zd-bulk-modal-header {
+  flex-shrink: 0;
+  padding: 20px 28px 16px 28px;
+  background: linear-gradient(135deg, rgba(248, 250, 252, 0.98) 0%, rgba(241, 245, 249, 0.9) 100%);
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.zd-bulk-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.zd-bulk-icon-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(29, 78, 216, 0.12);
+}
+
+.zd-bulk-modal-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.zd-bulk-modal-subtitle {
+  margin: 3px 0 0 0;
+  font-size: 12.5px;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.zd-bulk-close-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.zd-bulk-close-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+/* Step Wizard Progress Bar */
+.zd-bulk-stepper {
+  display: flex;
+  align-items: center;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 10px 24px;
+  overflow-x: auto;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.zd-bulk-step-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.zd-bulk-step-item--active {
+  color: #1d4ed8;
+}
+
+.zd-bulk-step-item--done {
+  color: #10b981;
+}
+
+.zd-bulk-step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.zd-bulk-step-item--active .zd-bulk-step-num {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.zd-bulk-step-item--done .zd-bulk-step-num {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.zd-bulk-step-sep {
+  color: #cbd5e1;
+  font-size: 14px;
+}
+
+/* Modal Body */
+.zd-bulk-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px 28px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Step 1: Download Template */
+.zd-template-download-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 20px;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.zd-template-download-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.zd-template-download-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.zd-btn-download-tpl {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.zd-btn-download-tpl--excel {
+  background: #10b981;
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+}
+
+.zd-btn-download-tpl--excel:hover {
+  background: #059669;
+}
+
+.zd-btn-download-tpl--csv {
+  background: #ffffff;
+  color: #334155;
+  border: 1.5px solid #cbd5e1;
+}
+
+.zd-btn-download-tpl--csv:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+/* Guidelines Box */
+.zd-guidelines-box {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  padding: 14px 18px;
+  font-size: 12.5px;
+  color: #1e3a8a;
+  line-height: 1.45;
+}
+
+.zd-guidelines-box h4 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1d4ed8;
+}
+
+.zd-guidelines-box ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Template Catalog Preview */
+.zd-catalog-table-wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.zd-catalog-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+
+.zd-catalog-table th {
+  background: #f8fafc;
+  padding: 10px 14px;
+  font-weight: 700;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.zd-catalog-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+}
+
+.zd-catalog-code-badge {
+  font-weight: 700;
+  color: #1d4ed8;
+  background: #dbeafe;
+  padding: 2px 7px;
+  border-radius: 5px;
+}
+
+/* Step 2: Upload Area */
+.zd-upload-dropzone {
+  border: 2px dashed #93c5fd;
+  background: #f8fafc;
+  border-radius: 16px;
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.zd-upload-dropzone:hover,
+.zd-upload-dropzone--dragover {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.zd-upload-icon-circle {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #dbeafe;
+  color: #1d4ed8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.zd-upload-text-main {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.zd-upload-text-sub {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+}
+
+.zd-file-selected-box {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.zd-file-selected-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.zd-file-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.zd-file-size {
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+/* Step 3: Column Mapping */
+.zd-mapping-table-wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.zd-mapping-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  text-align: left;
+}
+
+.zd-mapping-table th {
+  background: #f8fafc;
+  padding: 10px 16px;
+  font-weight: 700;
+  color: #475569;
+  border-bottom: 1.5px solid #e2e8f0;
+}
+
+.zd-mapping-table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.zd-mapping-select {
+  width: 100%;
+  max-width: 260px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid #cbd5e1;
+  font-size: 12px;
+  background: #ffffff;
+}
+
+/* Step 4: Preview & Summary */
+.zd-preview-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.zd-preview-stat-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.zd-preview-stat-val {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.zd-preview-stat-val--valid {
+  color: #10b981;
+}
+
+.zd-preview-stat-val--error {
+  color: #ef4444;
+}
+
+.zd-preview-stat-val--warn {
+  color: #f59e0b;
+}
+
+.zd-preview-stat-val--match {
+  color: #3b82f6;
+}
+
+.zd-preview-stat-lbl {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.zd-preview-table-wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow-x: auto;
+  max-height: 320px;
+}
+
+.zd-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+
+.zd-preview-table th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  padding: 10px 14px;
+  font-weight: 700;
+  color: #475569;
+  border-bottom: 1.5px solid #e2e8f0;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.zd-preview-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  white-space: nowrap;
+}
+
+.zd-preview-row--error {
+  background: #fff5f5;
+}
+
+.zd-preview-row--warn {
+  background: #fffdf5;
+}
+
+.zd-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.zd-status-pill--valid {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.zd-status-pill--error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.zd-status-pill--warn {
+  background: #fefce8;
+  color: #854d0e;
+  border: 1px solid #fef08a;
+}
+
+/* Step 5: Confirmation */
+.zd-confirm-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.zd-confirm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.zd-confirm-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.zd-confirm-exclude-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #ffffff;
+  border: 1.5px solid #fcd34d;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #92400e;
+  cursor: pointer;
+}
+
+.zd-security-notice {
+  font-size: 12px;
+  color: #64748b;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Step 6: Results */
+.zd-results-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+  padding: 20px 10px;
+}
+
+.zd-results-icon-big {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.zd-results-icon-big--success {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.zd-results-icon-big--partial {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.zd-results-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* Footer */
+.zd-bulk-modal-footer {
+  flex-shrink: 0;
+  padding: 16px 28px;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.zd-btn-modal-action {
+  padding: 9px 20px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.zd-btn-modal-action--secondary {
+  background: #ffffff;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.zd-btn-modal-action--secondary:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.zd-btn-modal-action--primary {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
+}
+
+.zd-btn-modal-action--primary:hover {
+  background: #1d4ed8;
+}
+
+.zd-btn-modal-action--primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Responsive adjustments */
+@media (max-width: 639.98px) {
+  .zd-bulk-modal-overlay {
+    padding: 12px;
+  }
+
+  .zd-bulk-modal-panel {
+    max-height: calc(100dvh - 24px);
+    border-radius: 16px;
+  }
+
+  .zd-bulk-modal-header {
+    padding: 16px 20px 14px 20px;
+  }
+
+  .zd-bulk-modal-body {
+    padding: 18px 20px;
+  }
+
+  .zd-bulk-modal-footer {
+    padding: 12px 20px;
+    flex-direction: column-reverse;
+    gap: 10px;
+  }
+
+  .zd-btn-modal-action {
+    width: 100%;
+    justify-content: center;
+  }
+}

@@ -498,7 +498,6 @@ export default function ClientDraftReviewPage() {
                 <div className="zd-review-meta-pills">
                   <span className="zd-order-template-badge">{doc.docType}</span>
                   <span className="zd-doc-ref-pill">Ref: {doc.ref}</span>
-                  <span className="zd-version-pill">Version: {doc.version || 'v1'}</span>
                   <span style={{ fontSize: 12, color: '#64748b' }}>Client: {doc.client}</span>
                 </div>
               </div>
@@ -568,7 +567,7 @@ export default function ClientDraftReviewPage() {
                 <div>
                   <h3 className="zd-modal-title">Request Changes to Draft</h3>
                   <p className="zd-modal-sub">
-                    Propose specific field changes and remarks for {doc.ref} ({doc.version || 'v1'}).
+                    Propose specific field changes and remarks for {doc.ref}.
                   </p>
                 </div>
               </div>

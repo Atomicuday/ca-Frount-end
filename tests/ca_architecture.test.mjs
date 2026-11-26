@@ -17,6 +17,13 @@ import { caDocumentsService } from '../src/services/api/caDocumentsService.js';
 import { caTemplateService } from '../src/services/api/caTemplateService.js';
 import { caClientService } from '../src/services/api/caClientService.js';
 import { caBillingService, formatINR, getCurrentFinancialYear } from '../src/services/api/caBillingService.js';
+import { caStampDutyService } from '../src/services/api/caStampDutyService.js';
+import {
+  caBulkImportService,
+  STANDARD_IMPORT_HEADERS,
+  sanitizeCsvCell,
+  normalizeDateInput
+} from '../src/services/api/caBulkImportService.js';
 import { CLIENT_TYPES } from '../src/mock/caTemplatesData.js';
 import { isValidEmail, isValidPhone, isValidPAN, isValidGSTIN } from '../src/utils/validation.js';
 import { getTimeBasedGreeting } from '../src/utils/greeting.js';
@@ -1642,5 +1649,425 @@ describe('CA Portal Architecture Suite', () => {
     assert.ok(screenContent.includes('<colgroup>'), 'Table must define balanced colgroup proportions');
     assert.ok(cssContent.includes('border-collapse: collapse;'), 'Unified table must use border-collapse: collapse');
     assert.ok(!cssContent.includes('.zd-docs-table th:first-child {\n  position: sticky;'), 'Must remove separate left/right pinned column overlays');
+  });
+
+  test('Dashboard Summary Cards include fourth State Stamp Duty card and reference dialog', async () => {
+    const summaryCardsPath = path.join(__dirname, '../src/screens/CADashboard/SummaryCards.jsx');
+    const summaryCardsCode = fs.readFileSync(summaryCardsPath, 'utf8');
+
+    // 1. Fourth card presence and attributes
+    assert.ok(summaryCardsCode.includes('state-stamp-duty'), 'Must include state-stamp-duty card ID');
+    assert.ok(summaryCardsCode.includes("'State Stamp Duty'"), 'Must have title "State Stamp Duty"');
+    assert.ok(summaryCardsCode.includes("'View Rates'"), 'Must have main text "View Rates"');
+    assert.ok(summaryCardsCode.includes("'Check duty by state and document type'"), 'Must have subtitle "Check duty by state and document type"');
+    assert.ok(summaryCardsCode.includes('Landmark'), 'Must import and use Landmark icon');
+    assert.ok(summaryCardsCode.includes('zd-summary-cards-grid--four'), 'Must use 4-column balanced grid layout');
+
+    // 2. Modals mounted
+    assert.ok(summaryCardsCode.includes('StateStampDutyModal'), 'Must mount StateStampDutyModal');
+    assert.ok(summaryCardsCode.includes('SummaryDetailsModal'), 'Must mount SummaryDetailsModal');
+    assert.ok(!summaryCardsCode.includes('useNavigate'), 'Must not navigate away from Dashboard');
+
+    // 3. Stamp Duty Service metadata and rules
+    const states = await caStampDutyService.getStates();
+    assert.ok(states.length >= 10, 'Must provide major Indian states');
+    assert.ok(states.some((s) => s.code === 'MH'), 'Must include Maharashtra');
+    assert.ok(states.some((s) => s.code === 'KA'), 'Must include Karnataka');
+    assert.ok(states.some((s) => s.code === 'DL'), 'Must include Delhi');
+
+    const docTypes = await caStampDutyService.getDocumentTypes();
+    assert.ok(docTypes.length >= 10, 'Must provide supported document categories');
+    assert.ok(docTypes.some((d) => d.id === 'partnership-deed'), 'Must include Partnership Deed');
+
+    // 4. Maharashtra Partnership Deed (0.5% with min ₹500 and max ₹10,000 cap)
+    const mhRule = await caStampDutyService.getStampDutyRule('MH', 'partnership-deed');
+    assert.equal(mhRule.status, 'verified');
+    assert.equal(mhRule.percentageRate, 0.5);
+    assert.equal(mhRule.minDuty, 500);
+    assert.equal(mhRule.maxDuty, 10000);
+    assert.ok(mhRule.articleReference.includes('Article 47'));
+    assert.equal(mhRule.providerAvailability.isDigitalAvailable, true);
+
+    const mhCalcNormal = caStampDutyService.calculateDutyEstimate(mhRule, { capitalContribution: 500000 });
+    assert.equal(mhCalcNormal.status, 'calculated');
+    assert.equal(mhCalcNormal.estimatedDuty, 2500, '500,000 * 0.5% should be 2,500');
+
+    const mhCalcFloor = caStampDutyService.calculateDutyEstimate(mhRule, { capitalContribution: 50000 });
+    assert.equal(mhCalcFloor.estimatedDuty, 500, 'Floor of ₹500 should apply when raw duty is ₹250');
+
+    const mhCalcCap = caStampDutyService.calculateDutyEstimate(mhRule, { capitalContribution: 5000000 });
+    assert.equal(mhCalcCap.estimatedDuty, 10000, 'Ceiling cap of ₹10,000 should apply when raw duty is ₹25,000');
+
+    // 5. Karnataka slab rule
+    const kaRule = await caStampDutyService.getStampDutyRule('KA', 'partnership-deed');
+    assert.equal(kaRule.status, 'verified');
+    assert.equal(kaRule.calculationBasis, 'slab');
+    const kaCalcLow = caStampDutyService.calculateDutyEstimate(kaRule, { capitalContribution: 40000 });
+    assert.equal(kaCalcLow.estimatedDuty, 1000);
+    const kaCalcHigh = caStampDutyService.calculateDutyEstimate(kaRule, { capitalContribution: 500000 });
+    assert.equal(kaCalcHigh.estimatedDuty, 5000);
+
+    // 6. Delhi flat rule
+    const dlRule = await caStampDutyService.getStampDutyRule('DL', 'partnership-deed');
+    assert.equal(dlRule.calculationBasis, 'fixed');
+    assert.equal(dlRule.fixedAmount, 200);
+    const dlCalc = caStampDutyService.calculateDutyEstimate(dlRule);
+    assert.equal(dlCalc.estimatedDuty, 200);
+
+    // 7. Unverified entry fallback (Rate not verified rather than ₹0)
+    const unverifiedRule = await caStampDutyService.getStampDutyRule('HR', 'board-resolution-extract');
+    assert.equal(unverifiedRule.status, 'unverified');
+    assert.equal(unverifiedRule.statusLabel, 'Rate not verified');
+    const unverifiedCalc = caStampDutyService.calculateDutyEstimate(unverifiedRule);
+    assert.equal(unverifiedCalc.estimatedDuty, null, 'Unverified entry must never return 0');
+    assert.equal(unverifiedCalc.statusLabel, 'Rate not verified');
+
+    // 8. Disclaimer check
+    assert.ok(mhCalcNormal.disclaimer.includes('Final duty depends on the document and is confirmed at checkout'));
+
+    // 9. State Stamp Duty reference service verification
+    const emptySummary = await caStampDutyService.getAllStatesDutySummary();
+    assert.equal(emptySummary.prompt, 'Select a document type to compare state-wise duty.');
+    assert.equal(emptySummary.disclaimer, 'Reference rates only. Final duty depends on document details and applicable rules.');
+    assert.equal(emptySummary.items.length, 0);
+
+    const docSpecificSummary = await caStampDutyService.getAllStatesDutySummary('partnership-deed');
+    assert.ok(docSpecificSummary.items.length >= 10, 'Must return states in document summary');
+    const mhItem = docSpecificSummary.items.find((it) => it.stateCode === 'MH');
+    assert.ok(mhItem.duty.includes('0.5%'), 'Maharashtra must show verified percentage rate for Partnership Deed');
+    assert.ok(mhItem.articleReference.includes('Article 47'), 'Must include statutory article');
+    assert.ok(mhItem.officialSourceUrl, 'Must include official source URL');
+    assert.equal(mhItem.effectiveDate, '01 Apr 2024', 'Must include effective date');
+    assert.equal(mhItem.lastVerifiedDate, '15 Nov 2026', 'Must include last verification date');
+
+    const hrItem = docSpecificSummary.items.find((it) => it.stateCode === 'HR');
+    assert.equal(hrItem.duty, 'Not verified', 'Unlisted state for document must show "Not verified", never 0');
+    assert.equal(hrItem.status, 'unverified');
+
+    // Confirmed exemption must show "Not applicable"
+    const exemptSummary = await caStampDutyService.getAllStatesDutySummary('board-resolution-extract');
+    const mhExempt = exemptSummary.items.find((it) => it.stateCode === 'MH');
+    assert.equal(mhExempt.duty, 'Not applicable', 'Confirmed exempt rule must show "Not applicable"');
+
+    // 10. Verify StateStampDutyModal component structure
+    const modalPath = path.join(__dirname, '../src/screens/CADashboard/modals/StateStampDutyModal.jsx');
+    const modalCode = fs.readFileSync(modalPath, 'utf8');
+    assert.ok(modalCode.includes('State / UT'), 'Must have State / UT column header');
+    assert.ok(modalCode.includes('Stamp Duty'), 'Must have Stamp Duty column header');
+    assert.ok(modalCode.includes('input-search-document-type'), 'Must have searchable Document Type input');
+    assert.ok(modalCode.includes('Select a document type to compare state-wise duty.'), 'Must prompt to select document type before selection');
+    assert.ok(modalCode.includes('expandedStateCode'), 'Must support clicking rate to expand details');
+    assert.ok(modalCode.includes('Reference rates only. Final duty depends on document details and applicable rules.'), 'Must keep single brief footer note');
+  });
+
+  test('Bulk Client & Document Import Service enforces security, file rejection, and formula neutralization', () => {
+    // 1. File security checks
+    assert.equal(caBulkImportService.validateFileSecurity({ name: 'test.xlsx', size: 1024 }).valid, true);
+    assert.equal(caBulkImportService.validateFileSecurity({ name: 'test.csv', size: 1024 }).valid, true);
+
+    const exeCheck = caBulkImportService.validateFileSecurity({ name: 'malicious.exe', size: 1024 });
+    assert.equal(exeCheck.valid, false);
+    assert.ok(exeCheck.error.includes('Executable, script, or macro-enabled files are prohibited'));
+
+    const macroCheck = caBulkImportService.validateFileSecurity({ name: 'template.xlsm', size: 1024 });
+    assert.equal(macroCheck.valid, false);
+
+    const oversizedCheck = caBulkImportService.validateFileSecurity({ name: 'huge.xlsx', size: 6 * 1024 * 1024 });
+    assert.equal(oversizedCheck.valid, false);
+    assert.ok(oversizedCheck.error.includes('File size exceeds the configured limit'));
+
+    // 2. Formula injection neutralization
+    assert.equal(sanitizeCsvCell('=SUM(A1:A10)'), "'=SUM(A1:A10)");
+    assert.equal(sanitizeCsvCell('+12345'), "'+12345");
+    assert.equal(sanitizeCsvCell('-500'), "'-500");
+    assert.equal(sanitizeCsvCell('@HYPERLINK("http://evil.com")'), "'@HYPERLINK(\"http://evil.com\")");
+    assert.equal(sanitizeCsvCell('Acme Technologies Pvt Ltd'), 'Acme Technologies Pvt Ltd');
+  });
+
+  test('Downloadable Import Template includes required sheets and excludes Aadhaar numbers', () => {
+    const xlsxBytes = caBulkImportService.generateTemplateWorkbook();
+    assert.ok(xlsxBytes instanceof Uint8Array);
+    assert.ok(xlsxBytes.length > 500, 'Template workbook binary must not be empty');
+    // Zip signature check
+    assert.equal(xlsxBytes[0], 0x50);
+    assert.equal(xlsxBytes[1], 0x4b);
+
+    const csvContent = caBulkImportService.generateTemplateCsv();
+    assert.ok(csvContent.includes('Company / Entity Name'));
+    assert.ok(csvContent.includes('Document Template Code'));
+    assert.ok(csvContent.includes('Due Date'));
+    assert.ok(csvContent.includes('Expiry Date'));
+    assert.ok(!csvContent.toLowerCase().includes('aadhaar'), 'Bulk template must never include Aadhaar column');
+  });
+
+  test('Date Semantics: Distinct due date vs expiry date, calendar validation and overdue warnings', () => {
+    // Normalization & calendar check
+    const validFuture = normalizeDateInput('2026-12-31');
+    assert.equal(validFuture.isValid, true);
+    assert.equal(validFuture.value, '2026-12-31');
+    assert.equal(validFuture.isPast, false);
+
+    const slashed = normalizeDateInput('31/12/2026');
+    assert.equal(slashed.isValid, true);
+    assert.equal(slashed.value, '2026-12-31');
+
+    // Past date preserved and flagged (not silently moved forward)
+    const pastDate = normalizeDateInput('2026-10-15');
+    assert.equal(pastDate.isValid, true);
+    assert.equal(pastDate.value, '2026-10-15');
+    assert.equal(pastDate.isPast, true);
+
+    // Invalid calendar date
+    const badDate = normalizeDateInput('2026-02-31');
+    assert.equal(badDate.isValid, false);
+  });
+
+  test('Validation Engine: Rejects cross-firm references and validates template requirements', async () => {
+    const headers = [
+      'External Row Reference',
+      'Existing Client Reference',
+      'Company / Entity Name',
+      'Primary Contact Name',
+      'Mobile Number',
+      'Email Address',
+      'Document Template Code',
+      'Jurisdiction / State',
+      'Due Date',
+      'Expiry Date'
+    ];
+
+    const dataRows = [
+      // Row 1: Valid new client with AUD
+      ['ROW-001', '', 'Alpha Corp Pvt Ltd', 'John Doe', '9886011223', 'john@alphacorp.in', 'AUD', 'KA', '2026-12-31', ''],
+      // Row 2: Cross-firm client reference (must reject)
+      ['ROW-002', 'CLI-9999-NONEXISTENT', 'Beta LLC', 'Jane Smith', '9886011224', 'jane@beta.in', 'GST', 'DL', '', ''],
+      // Row 3: AUD missing required email (must reject)
+      ['ROW-003', '', 'Gamma Ltd', 'Robert Ray', '9886011225', '', 'AUD', 'MH', '', ''],
+      // Row 4: Past due date (valid with warning)
+      ['ROW-004', '', 'Delta LLP', 'Alice Day', '9886011226', 'alice@delta.in', 'LLP', 'KA', '2026-10-15', '']
+    ];
+
+    const columnMapping = {};
+    headers.forEach((h) => {
+      const match = STANDARD_IMPORT_HEADERS.find((std) => std.label.toLowerCase() === h.toLowerCase());
+      if (match) columnMapping[match.key] = h;
+    });
+
+    const result = await caBulkImportService.validateImportRows({
+      dataRows,
+      headers,
+      columnMapping,
+      contactsRows: []
+    });
+
+    assert.equal(result.totalRows, 4);
+    assert.equal(result.validRows, 2);
+    assert.equal(result.errorRows, 2);
+
+    // Check cross-firm rejection on Row 2
+    const row2 = result.rows.find((r) => r.externalRowRef === 'ROW-002');
+    assert.equal(row2.isValid, false);
+    assert.ok(row2.errors.some((e) => e.includes('Cross-firm references are rejected')));
+
+    // Check AUD email requirement on Row 3
+    const row3 = result.rows.find((r) => r.externalRowRef === 'ROW-003');
+    assert.equal(row3.isValid, false);
+    assert.ok(row3.errors.some((e) => e.includes('requires a valid email address')));
+
+    // Check past due date warning on Row 4
+    const row4 = result.rows.find((r) => r.externalRowRef === 'ROW-004');
+    assert.equal(row4.isValid, true);
+    assert.ok(row4.warnings.some((w) => w.includes('is in the past (Overdue)')));
+  });
+
+  test('Idempotent Import Execution groups multiple documents for single client and creates distinct drafts', async () => {
+    const headers = [
+      'External Row Reference',
+      'Existing Client Reference',
+      'Company / Entity Name',
+      'Primary Contact Name',
+      'Mobile Number',
+      'Email Address',
+      'Document Template Code',
+      'Jurisdiction / State',
+      'Due Date',
+      'Expiry Date'
+    ];
+
+    const dataRows = [
+      // 2 rows for the SAME new company: should create 1 client entity and 2 linked documents
+      ['ROW-010', '', 'Starlight Solar Solutions Pvt Ltd', 'Sunil Verma', '9845011999', 'sunil@starlight.in', 'AUD', 'KA', '2026-12-31', ''],
+      ['ROW-011', '', 'Starlight Solar Solutions Pvt Ltd', 'Sunil Verma', '9845011999', 'sunil@starlight.in', 'GST', 'KA', '2026-12-31', '']
+    ];
+
+    const columnMapping = {};
+    headers.forEach((h) => {
+      const match = STANDARD_IMPORT_HEADERS.find((std) => std.label.toLowerCase() === h.toLowerCase());
+      if (match) columnMapping[match.key] = h;
+    });
+
+    const valResult = await caBulkImportService.validateImportRows({
+      dataRows,
+      headers,
+      columnMapping
+    });
+
+    const job = await caBulkImportService.executeImport({
+      validatedRows: valResult.rows,
+      excludeErrors: false
+    });
+
+    assert.equal(job.status, 'COMPLETED');
+    assert.equal(job.successCount, 2);
+    // Entity reuse: 1 new client created for 2 documents
+    assert.equal(job.createdClientsCount, 1);
+    assert.equal(job.createdDocuments.length, 2);
+
+    const doc1 = job.createdDocuments[0];
+    const doc2 = job.createdDocuments[1];
+
+    // Same client ID shared across both drafts
+    assert.equal(doc1.clientId, doc2.clientId);
+    // Distinct document IDs & refs
+    assert.notEqual(doc1.id, doc2.id);
+    assert.notEqual(doc1.ref, doc2.ref);
+
+    // Initial status strictly Draft & Unbilled (no automated wallet debits or execution locks)
+    assert.equal(doc1.statusCode, 'draft');
+    assert.equal(doc1.payment.status, 'UNBILLED');
+    assert.equal(doc1.execution.isLocked, false);
+    assert.equal(doc2.statusCode, 'draft');
+  });
+
+  test('Batch Review Invitation dispatch isolates per-document results and tracks notifications', async () => {
+    const docs = await caDocumentsService.getDocuments({ limit: 5 });
+    const draftDocs = docs.data.filter((d) => d.statusCode === 'draft' || d.statusCode === 'awaiting_info');
+
+    if (draftDocs.length > 0) {
+      const targetIds = draftDocs.slice(0, 2).map((d) => d.id);
+      const res = await caBulkImportService.dispatchBatchDraftReview(targetIds);
+      assert.equal(res.total, targetIds.length);
+      assert.ok(res.results.length >= 1);
+    }
+  });
+
+  test('Due & Expiring Documents Tracking categorizes task deadlines and charter expiration', async () => {
+    const dueExpiringDocs = await caBulkImportService.getDueAndExpiringDocuments({ filter: 'All' });
+    assert.ok(Array.isArray(dueExpiringDocs));
+
+    const overdueDocs = await caBulkImportService.getDueAndExpiringDocuments({ filter: 'Overdue' });
+    assert.ok(Array.isArray(overdueDocs));
+    assert.ok(overdueDocs.every((d) => d.isDueOverdue));
+
+    const due7Days = await caBulkImportService.getDueAndExpiringDocuments({ filter: 'Due in 7 Days' });
+    assert.ok(Array.isArray(due7Days));
+  });
+
+  test('Documents Screen UI integrates separated Due / Expiry and Main Filters popovers in toolbar', () => {
+    const docsScreenPath = path.join(__dirname, '../src/screens/CADocuments/CADocumentsScreen.jsx');
+    const docsScreenCode = fs.readFileSync(docsScreenPath, 'utf8');
+
+    // Header buttons
+    assert.ok(docsScreenCode.includes('btn-bulk-upload-documents'), 'Must include Bulk Upload button in header');
+    assert.ok(docsScreenCode.includes('btn-add-client-document'), 'Must preserve existing Add Client button');
+    assert.ok(docsScreenCode.includes('BulkUploadModal'), 'Must mount BulkUploadModal');
+    assert.ok(docsScreenCode.includes('BatchInviteModal'), 'Must mount BatchInviteModal');
+    assert.ok(!docsScreenCode.includes('<DueExpiringSection'), 'Must remove standalone DueExpiringSection panel from Documents screen');
+
+    // Toolbar buttons
+    assert.ok(docsScreenCode.includes('input-docs-search'), 'Must have search input on left');
+    assert.ok(docsScreenCode.includes('btn-docs-due-expiry-toggle'), 'Must have Due / Expiry button on right');
+    assert.ok(docsScreenCode.includes('btn-docs-filter-toggle'), 'Must have Filters button on right');
+
+    // Due / Expiry popover with separate selectors
+    assert.ok(docsScreenCode.includes('docs-due-expiry-popover'), 'Must mount separate Due / Expiry popover');
+    assert.ok(docsScreenCode.includes('filter-select-due-date'), 'Must have Due Date selector');
+    assert.ok(docsScreenCode.includes('filter-select-expiry-date'), 'Must have Expiry Date selector');
+    assert.ok(docsScreenCode.includes('btn-due-expiry-clear'), 'Must have Clear action in Due / Expiry popover');
+    assert.ok(docsScreenCode.includes('btn-due-expiry-apply'), 'Must have Apply action in Due / Expiry popover');
+
+    // Main Filters popover without Due/Expiry selector
+    assert.ok(docsScreenCode.includes('docs-filter-popover'), 'Must mount Main Filters popover');
+    assert.ok(docsScreenCode.includes('filter-select-status'), 'Must have Status selector');
+    assert.ok(docsScreenCode.includes('filter-select-type'), 'Must have Type selector');
+    assert.ok(docsScreenCode.includes('filter-select-date'), 'Must have Created Date selector');
+    assert.ok(!docsScreenCode.includes('filter-select-due-expiry'), 'Must remove Due/Expiry dropdown from Main Filters popover');
+    assert.ok(docsScreenCode.includes('btn-filter-clear-all'), 'Must have Clear action in Main Filters popover');
+    assert.ok(docsScreenCode.includes('btn-filter-apply'), 'Must have Apply action in Main Filters popover');
+
+    // Empty state & active filter chips
+    assert.ok(docsScreenCode.includes('btn-empty-clear-filters'), 'Must include Clear Filters button in empty state');
+    assert.ok(docsScreenCode.includes('zd-active-filter-chips-bar'), 'Must include active filter chips bar');
+
+    const modalPath = path.join(__dirname, '../src/screens/CADocuments/modals/BulkUploadModal.jsx');
+    const modalCode = fs.readFileSync(modalPath, 'utf8');
+    assert.ok(modalCode.includes('Download Template'), 'Must have Step 1: Download Template');
+    assert.ok(modalCode.includes('Upload'), 'Must have Step 2: Upload');
+    assert.ok(modalCode.includes('Map & Validate'), 'Must have Step 3: Map & Validate');
+    assert.ok(modalCode.includes('Preview'), 'Must have Step 4: Preview');
+    assert.ok(modalCode.includes('Confirm Import'), 'Must have Step 5: Confirm Import');
+    assert.ok(modalCode.includes('Results'), 'Must have Step 6: Results');
+  });
+
+  test('caDocumentsService separates Due Date and Expiry Date with strict date boundaries and AND combination', async () => {
+    const {
+      DUE_DATE_FILTER_OPTIONS,
+      EXPIRY_DATE_FILTER_OPTIONS,
+      caDocumentsService
+    } = await import('../src/services/api/caDocumentsService.js');
+
+    // Verify option schemas
+    assert.deepStrictEqual(
+      DUE_DATE_FILTER_OPTIONS.map((o) => o.value),
+      ['ANY', 'OVERDUE', 'TODAY', 'NEXT_7', 'NEXT_30']
+    );
+    assert.deepStrictEqual(
+      DUE_DATE_FILTER_OPTIONS.map((o) => o.label),
+      ['All', 'Overdue', 'Due Today', 'Due in 7 Days', 'Due in 30 Days']
+    );
+
+    assert.deepStrictEqual(
+      EXPIRY_DATE_FILTER_OPTIONS.map((o) => o.value),
+      ['ANY', 'EXPIRED', 'TODAY', 'NEXT_7', 'NEXT_30']
+    );
+    assert.deepStrictEqual(
+      EXPIRY_DATE_FILTER_OPTIONS.map((o) => o.label),
+      ['All', 'Expired', 'Expires Today', 'Expiring in 7 Days', 'Expiring in 30 Days']
+    );
+
+    // Missing dates match Any, but not a specific date filter
+    const allDocs = await caDocumentsService.getDocuments({ dueDateFilter: 'ANY', expiryDateFilter: 'ANY' });
+    const docsWithNoDueDate = allDocs.data.filter((d) => !d.dueDate);
+    assert.ok(docsWithNoDueDate.length > 0, 'Must have records with missing dueDate');
+
+    const specificDueDocs = await caDocumentsService.getDocuments({ dueDateFilter: 'NEXT_30' });
+    assert.ok(specificDueDocs.data.every((d) => Boolean(d.dueDate)), 'Specific dueDate filter must exclude missing dueDate');
+
+    const specificExpiryDocs = await caDocumentsService.getDocuments({ expiryDateFilter: 'NEXT_30' });
+    assert.ok(specificExpiryDocs.data.every((d) => Boolean(d.expiryDate)), 'Specific expiryDate filter must exclude missing expiryDate');
+
+    // Today is separate from overdue / expired
+    const dueTodayDocs = await caDocumentsService.getDocuments({ dueDateFilter: 'TODAY' });
+    const overdueDocs = await caDocumentsService.getDocuments({ dueDateFilter: 'OVERDUE' });
+    const dueTodayIds = new Set(dueTodayDocs.data.map((d) => d.id));
+    assert.ok(overdueDocs.data.every((d) => !dueTodayIds.has(d.id)), 'Overdue docs must not overlap with Due Today');
+
+    const expiresTodayDocs = await caDocumentsService.getDocuments({ expiryDateFilter: 'TODAY' });
+    const expiredDocs = await caDocumentsService.getDocuments({ expiryDateFilter: 'EXPIRED' });
+    const expiresTodayIds = new Set(expiresTodayDocs.data.map((d) => d.id));
+    assert.ok(expiredDocs.data.every((d) => !expiresTodayIds.has(d.id)), 'Expired docs must not overlap with Expires Today');
+
+    // Upcoming ranges include today and exclude past dates
+    const due7Docs = await caDocumentsService.getDocuments({ dueDateFilter: 'NEXT_7' });
+    assert.ok(overdueDocs.data.every((d) => !due7Docs.data.map((x) => x.id).includes(d.id)), 'NEXT_7 must exclude past overdue dates');
+
+    // Combine both selections with AND, alongside search and other applied filters
+    const combinedDocs = await caDocumentsService.getDocuments({
+      dueDateFilter: 'NEXT_30',
+      expiryDateFilter: 'ANY',
+      status: 'ALL'
+    });
+    assert.ok(Array.isArray(combinedDocs.data));
+    assert.ok(combinedDocs.data.every((d) => Boolean(d.dueDate)));
   });
 });

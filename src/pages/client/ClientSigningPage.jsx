@@ -487,7 +487,7 @@ export default function ClientSigningPage() {
                 <div className="zd-review-meta-pills">
                   <span className="zd-order-template-badge">{doc.docType}</span>
                   <span className="zd-doc-ref-pill">Ref: {doc.ref}</span>
-                  <span className="zd-version-pill">{doc.version || 'v1'} (Locked for Execution)</span>
+                  <span className="zd-version-pill">Locked for Execution</span>
                 </div>
               </div>
             </div>

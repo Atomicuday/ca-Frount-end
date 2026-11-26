@@ -9,11 +9,12 @@ import {
   CheckCircle2,
   KeyRound,
   ShieldCheck,
-  FileCheck
+  FileCheck,
+  Bell
 } from 'lucide-react';
 import { caDocumentsService } from '../../../services/api/caDocumentsService.js';
 
-export default function DocumentPreviewModal({ isOpen, onClose, document }) {
+export default function DocumentPreviewModal({ isOpen, onClose, document, onSendReminder }) {
   const [downloadInfo, setDownloadInfo] = useState(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
@@ -86,7 +87,7 @@ export default function DocumentPreviewModal({ isOpen, onClose, document }) {
             <div>
               <h2 className="zd-modal-title" id="doc-details-title">{document.title}</h2>
               <p className="zd-modal-sub">
-                Ref: {document.ref} ({document.version || 'v1'}) • {document.client} ({document.clientType})
+                Ref: {document.ref} • {document.client} ({document.clientType})
               </p>
             </div>
           </div>
@@ -199,6 +200,22 @@ export default function DocumentPreviewModal({ isOpen, onClose, document }) {
               <span className="zd-preview-item-label">Signer / DSC State</span>
               <span className="zd-preview-item-val">{document.statusDetails?.signerStatus}</span>
             </div>
+            {document.dueDate && (
+              <div className="zd-preview-item">
+                <span className="zd-preview-item-label">Task Due Date</span>
+                <span className="zd-preview-item-val" style={{ color: '#d97706', fontWeight: 600 }}>
+                  {document.dueDate}
+                </span>
+              </div>
+            )}
+            {document.expiryDate && (
+              <div className="zd-preview-item">
+                <span className="zd-preview-item-label">Charter Expiry Date</span>
+                <span className="zd-preview-item-val" style={{ color: '#7c3aed', fontWeight: 600 }}>
+                  {document.expiryDate}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Form Data Summary */}
@@ -257,6 +274,19 @@ export default function DocumentPreviewModal({ isOpen, onClose, document }) {
           <button type="button" className="zd-btn-action zd-btn-action--secondary" onClick={onClose}>
             Close
           </button>
+
+          {onSendReminder && !isCompleted && (
+            <button
+              type="button"
+              className="zd-btn-action zd-btn-action--secondary"
+              id="btn-modal-send-reminder"
+              onClick={() => onSendReminder(document)}
+              title="Send portal or email reminder for this document"
+            >
+              <Bell size={15} />
+              <span>Send Reminder</span>
+            </button>
+          )}
 
           {isCompleted ? (
             isFinalFileProcessing ? (

@@ -90,7 +90,7 @@ export default function SendLinkModal({ isOpen, onClose, document, onDispatchLin
                 {isSigningLink ? 'Dispatch Execution & Signing Link' : 'Dispatch Draft Review Invitation'}
               </h2>
               <p className="zd-modal-sub">
-                {document.ref} ({document.version || 'v1'}) • {document.client}
+                {document.ref} • {document.client}
               </p>
             </div>
           </div>

@@ -83,7 +83,7 @@ export default function EditRequestsModal({ isOpen, onClose, document, onDecisio
             <div>
               <h2 className="zd-modal-title" id="edit-requests-title">Correction Requests & Feedback</h2>
               <p className="zd-modal-sub">
-                {document.ref} ({document.version || 'v1'}) • {document.client} ({unresolvedRequests.length} pending review)
+                {document.ref} • {document.client} ({unresolvedRequests.length} pending review)
               </p>
             </div>
           </div>
@@ -129,7 +129,6 @@ export default function EditRequestsModal({ isOpen, onClose, document, onDecisio
                     <div className="zd-request-author-block">
                       <strong className="zd-request-author">{req.author || req.requesterName}</strong>
                       <span className="zd-request-role">• {req.role || 'Client Reviewer'}</span>
-                      <span className="zd-version-tag">Ver: {req.version || document.version || 'v1'}</span>
                     </div>
                     <span className="zd-request-time">
                       <Clock size={11} />

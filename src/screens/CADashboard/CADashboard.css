@@ -1,6 +1,6 @@
 /* ==========================================================================
    ZapDocs CA Portal – Dashboard Styles (Pixel-Accurate Glassmorphism)
-   Visual Baseline: ZapDocs Real Estate (Broker Portal) Dashboard
+   Visual Baseline: ZapDocs Practice Management Dashboard
    ========================================================================== */
 
 :root {
@@ -226,6 +226,26 @@
   gap: 16px;
 }
 
+.zd-summary-cards-grid--four {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 1199.98px) {
+  .zd-summary-cards-grid--four {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+}
+
+@media (max-width: 639.98px) {
+  .zd-summary-cards-grid--four {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
 @media (max-width: 1023.98px) {
   .zd-summary-cards-grid--three {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -395,6 +415,14 @@
   line-height: 1;
   color: #0f172a;
   letter-spacing: -0.025em;
+}
+
+.zd-resource-count--text {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  color: #6d28d9;
+  white-space: nowrap;
 }
 
 .zd-resource-label {

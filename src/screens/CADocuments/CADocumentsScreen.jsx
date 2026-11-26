@@ -26,9 +26,16 @@ import {
   Clock,
   Users,
   ShieldCheck,
-  Cpu
+  Cpu,
+  UploadCloud,
+  Calendar
 } from 'lucide-react';
-import { caDocumentsService } from '../../services/api/caDocumentsService';
+import {
+  caDocumentsService,
+  DUE_DATE_FILTER_OPTIONS,
+  EXPIRY_DATE_FILTER_OPTIONS,
+  DUE_EXPIRY_FILTER_OPTIONS
+} from '../../services/api/caDocumentsService';
 import { caClientService } from '../../services/api/caClientService';
 import { DOCUMENT_STATUSES, DOCUMENT_TYPES } from '../../mock/caDocumentsData';
 import { LoadingState, ErrorState, TablePagination } from '../../components/shared';
@@ -40,6 +47,8 @@ import SendLinkModal from './modals/SendLinkModal';
 import DocumentPreviewModal from './modals/DocumentPreviewModal';
 import PaymentModal from './modals/PaymentModal';
 import CompletionModal from './modals/CompletionModal';
+import BulkUploadModal from './modals/BulkUploadModal';
+import BatchInviteModal from './modals/BatchInviteModal';
 
 import './CADocuments.css';
 
@@ -61,11 +70,25 @@ export default function CADocumentsScreen() {
   const [searchParams, setSearchParams] = useSearchParams();
   const clientId = searchParams.get('clientId') || '';
 
-  // Query & Filter States
+  // Query & Main Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [dateRangeFilter, setDateRangeFilter] = useState('ALL');
+
+  // Due / Expiry Filter States
+  const [dueDateFilter, setDueDateFilter] = useState('ANY');
+  const [expiryDateFilter, setExpiryDateFilter] = useState('ANY');
+
+  // Draft filter states for Main Filters popover
+  const [draftStatus, setDraftStatus] = useState('ALL');
+  const [draftType, setDraftType] = useState('ALL');
+  const [draftDateRange, setDraftDateRange] = useState('ALL');
+
+  // Draft filter states for Due / Expiry popover
+  const [draftDueDate, setDraftDueDate] = useState('ANY');
+  const [draftExpiryDate, setDraftExpiryDate] = useState('ANY');
+
   const [clientFilterName, setClientFilterName] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10);
@@ -83,9 +106,19 @@ export default function CADocumentsScreen() {
   const popoverRef = useRef(null);
   const [popoverPos, setPopoverPos] = useState({ top: 0, left: 0, width: 290 });
 
+  const [dueExpiryOpen, setDueExpiryOpen] = useState(false);
+  const dueExpiryButtonRef = useRef(null);
+  const dueExpiryPopoverRef = useRef(null);
+  const [dueExpiryPopoverPos, setDueExpiryPopoverPos] = useState({ top: 0, left: 0, width: 290 });
+
   const [activeModal, setActiveModal] = useState(null); // 'add_client' | 'edit_inputs' | 'edit_requests' | 'send_link' | 'preview'
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
+
+  // Bulk Upload & Batch Actions
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
+  const [isBatchInviteOpen, setIsBatchInviteOpen] = useState(false);
+  const [batchInviteDocs, setBatchInviteDocs] = useState([]);
 
   // Resolve client name when filtered by clientId
   useEffect(() => {
@@ -119,12 +152,11 @@ export default function CADocumentsScreen() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // Calculate anchored position for filter popover relative to button and viewport
+  // Calculate anchored position for Main Filter popover relative to button and viewport
   const updatePopoverPosition = useCallback(() => {
     if (!filterButtonRef.current) return;
     const rect = filterButtonRef.current.getBoundingClientRect();
-    const popoverWidth = Math.min(300, window.innerWidth - 32);
-    // Align right edge of popover with right edge of button
+    const popoverWidth = Math.min(290, window.innerWidth - 32);
     let left = rect.right - popoverWidth;
     if (left < 16) left = 16;
     if (left + popoverWidth > window.innerWidth - 16) {
@@ -134,8 +166,51 @@ export default function CADocumentsScreen() {
     const maxHeight = Math.max(200, window.innerHeight - top - 16);
     setPopoverPos({ top, left, width: popoverWidth, maxHeight });
   }, []);
+  const updateMainPopoverPosition = updatePopoverPosition;
 
-  // Close filter popover on outside click, Escape, and track resize/scroll
+  // Calculate anchored position for Due / Expiry popover relative to button and viewport
+  const updateDueExpiryPopoverPosition = useCallback(() => {
+    if (!dueExpiryButtonRef.current) return;
+    const rect = dueExpiryButtonRef.current.getBoundingClientRect();
+    const popoverWidth = Math.min(290, window.innerWidth - 32);
+    let left = rect.right - popoverWidth;
+    if (left < 16) left = 16;
+    if (left + popoverWidth > window.innerWidth - 16) {
+      left = window.innerWidth - popoverWidth - 16;
+    }
+    const top = rect.bottom + 8;
+    const maxHeight = Math.max(200, window.innerHeight - top - 16);
+    setDueExpiryPopoverPos({ top, left, width: popoverWidth, maxHeight });
+  }, []);
+
+  // Toggle Main Filters popover (Open only one popover at a time)
+  const toggleMainFiltersPopover = () => {
+    if (!filtersOpen) {
+      setDraftStatus(statusFilter);
+      setDraftType(typeFilter);
+      setDraftDateRange(dateRangeFilter);
+      updateMainPopoverPosition();
+      setDueExpiryOpen(false);
+      setFiltersOpen(true);
+    } else {
+      setFiltersOpen(false);
+    }
+  };
+
+  // Toggle Due / Expiry popover (Open only one popover at a time)
+  const toggleDueExpiryPopover = () => {
+    if (!dueExpiryOpen) {
+      setDraftDueDate(dueDateFilter);
+      setDraftExpiryDate(expiryDateFilter);
+      updateDueExpiryPopoverPosition();
+      setFiltersOpen(false);
+      setDueExpiryOpen(true);
+    } else {
+      setDueExpiryOpen(false);
+    }
+  };
+
+  // Close Main filter popover on outside click, Escape, and track resize/scroll
   useEffect(() => {
     function handleClickOutside(e) {
       if (
@@ -157,12 +232,11 @@ export default function CADocumentsScreen() {
     }
 
     if (filtersOpen) {
-      updatePopoverPosition();
+      updateMainPopoverPosition();
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('keydown', handleKeyDown);
-      window.addEventListener('resize', updatePopoverPosition);
-      window.addEventListener('scroll', updatePopoverPosition, true);
-      // Keyboard focus: Focus first interactive control when popover opens
+      window.addEventListener('resize', updateMainPopoverPosition);
+      window.addEventListener('scroll', updateMainPopoverPosition, true);
       setTimeout(() => {
         const firstFocusable = popoverRef.current?.querySelector('select, button, input');
         firstFocusable?.focus();
@@ -171,10 +245,50 @@ export default function CADocumentsScreen() {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('resize', updatePopoverPosition);
-      window.removeEventListener('scroll', updatePopoverPosition, true);
+      window.removeEventListener('resize', updateMainPopoverPosition);
+      window.removeEventListener('scroll', updateMainPopoverPosition, true);
     };
-  }, [filtersOpen, updatePopoverPosition]);
+  }, [filtersOpen, updateMainPopoverPosition]);
+
+  // Close Due / Expiry popover on outside click, Escape, and track resize/scroll
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (
+        dueExpiryPopoverRef.current &&
+        !dueExpiryPopoverRef.current.contains(e.target) &&
+        dueExpiryButtonRef.current &&
+        !dueExpiryButtonRef.current.contains(e.target)
+      ) {
+        setDueExpiryOpen(false);
+      }
+    }
+
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setDueExpiryOpen(false);
+        dueExpiryButtonRef.current?.focus();
+      }
+    }
+
+    if (dueExpiryOpen) {
+      updateDueExpiryPopoverPosition();
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+      window.addEventListener('resize', updateDueExpiryPopoverPosition);
+      window.addEventListener('scroll', updateDueExpiryPopoverPosition, true);
+      setTimeout(() => {
+        const firstFocusable = dueExpiryPopoverRef.current?.querySelector('select, button, input');
+        firstFocusable?.focus();
+      }, 50);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', updateDueExpiryPopoverPosition);
+      window.removeEventListener('scroll', updateDueExpiryPopoverPosition, true);
+    };
+  }, [dueExpiryOpen, updateDueExpiryPopoverPosition]);
 
   // Load documents from service
   const loadDocuments = useCallback(async () => {
@@ -186,6 +300,8 @@ export default function CADocumentsScreen() {
         status: statusFilter,
         docType: typeFilter,
         dateRange: dateRangeFilter,
+        dueDateFilter,
+        expiryDateFilter,
         clientId: clientId || null,
         page: currentPage,
         limit: pageSize
@@ -200,24 +316,53 @@ export default function CADocumentsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, statusFilter, typeFilter, dateRangeFilter, clientId, currentPage, pageSize]);
+  }, [searchQuery, statusFilter, typeFilter, dateRangeFilter, dueDateFilter, expiryDateFilter, clientId, currentPage, pageSize]);
 
   useEffect(() => {
     loadDocuments();
   }, [loadDocuments]);
 
-  // Reset pagination on search or filter change
+  // Reset pagination on search change
   const handleSearchChange = (val) => {
     setSearchQuery(val);
     setCurrentPage(1);
   };
 
-  const handleApplyFilters = (newStatus, newType, newDate) => {
-    setStatusFilter(newStatus);
-    setTypeFilter(newType);
-    setDateRangeFilter(newDate);
+  // Main Filters popover handlers
+  const handleApplyMainFilters = () => {
+    setStatusFilter(draftStatus);
+    setTypeFilter(draftType);
+    setDateRangeFilter(draftDateRange);
     setCurrentPage(1);
     setFiltersOpen(false);
+  };
+
+  const handleClearMainFilters = () => {
+    setDraftStatus('ALL');
+    setDraftType('ALL');
+    setDraftDateRange('ALL');
+    setStatusFilter('ALL');
+    setTypeFilter('ALL');
+    setDateRangeFilter('ALL');
+    setCurrentPage(1);
+    setFiltersOpen(false);
+  };
+
+  // Due / Expiry popover handlers
+  const handleApplyDueExpiryFilters = () => {
+    setDueDateFilter(draftDueDate);
+    setExpiryDateFilter(draftExpiryDate);
+    setCurrentPage(1);
+    setDueExpiryOpen(false);
+  };
+
+  const handleClearDueExpiryFilters = () => {
+    setDraftDueDate('ANY');
+    setDraftExpiryDate('ANY');
+    setDueDateFilter('ANY');
+    setExpiryDateFilter('ANY');
+    setCurrentPage(1);
+    setDueExpiryOpen(false);
   };
 
   // Dedicated action to clear the client filter while preserving any text search
@@ -228,23 +373,40 @@ export default function CADocumentsScreen() {
     setCurrentPage(1);
   };
 
-  const handleClearFilters = () => {
+  // Global reset action
+  const handleClearAllFilters = () => {
     setStatusFilter('ALL');
     setTypeFilter('ALL');
     setDateRangeFilter('ALL');
+    setDraftStatus('ALL');
+    setDraftType('ALL');
+    setDraftDateRange('ALL');
+
+    setDueDateFilter('ANY');
+    setExpiryDateFilter('ANY');
+    setDraftDueDate('ANY');
+    setDraftExpiryDate('ANY');
+
     setSearchQuery('');
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete('clientId');
     setSearchParams(nextParams);
     setCurrentPage(1);
     setFiltersOpen(false);
+    setDueExpiryOpen(false);
   };
 
-  const activeFilterCount =
+  const mainFilterCount =
     (statusFilter !== 'ALL' ? 1 : 0) +
     (typeFilter !== 'ALL' ? 1 : 0) +
     (dateRangeFilter !== 'ALL' ? 1 : 0) +
     (clientId ? 1 : 0);
+
+  const dueExpiryFilterCount =
+    (dueDateFilter !== 'ANY' ? 1 : 0) +
+    (expiryDateFilter !== 'ANY' ? 1 : 0);
+
+  const totalActiveFilterCount = mainFilterCount + dueExpiryFilterCount;
 
   // Modal Handlers
   const handleClientCreated = async (payload) => {
@@ -478,8 +640,18 @@ export default function CADocumentsScreen() {
           </p>
         </div>
 
-        {/* Right-Aligned "Add Client" Button (Sketch Top Right) */}
+        {/* Right-Aligned "Bulk Upload" and "Add Client" Buttons */}
         <div className="zd-docs-header-action-row">
+          <button
+            type="button"
+            id="btn-bulk-upload-documents"
+            className="zd-btn-action zd-btn-action--secondary zd-btn-bulk-upload"
+            onClick={() => setIsBulkUploadOpen(true)}
+          >
+            <UploadCloud size={16} aria-hidden="true" />
+            <span>Bulk Upload</span>
+          </button>
+
           <button
             type="button"
             id="btn-add-client-document"
@@ -518,31 +690,145 @@ export default function CADocumentsScreen() {
           )}
         </div>
 
-        {/* Filters Button on Right with Popover Portal */}
-        <div className="zd-docs-filters-dropdown-wrap">
+        {/* Action Controls on the Right: 1. Due / Expiry, 2. Filters */}
+        <div className="zd-docs-toolbar-actions">
+          {/* 1. Due / Expiry Filter Button */}
+          <button
+            ref={dueExpiryButtonRef}
+            type="button"
+            id="btn-docs-due-expiry-toggle"
+            className={`zd-btn-action zd-btn-action--secondary zd-btn-filter ${
+              dueExpiryFilterCount > 0 ? 'active' : ''
+            }`}
+            onClick={toggleDueExpiryPopover}
+            aria-expanded={dueExpiryOpen}
+            aria-haspopup="dialog"
+            aria-label="Toggle due and expiry date filters popover"
+          >
+            <Calendar size={15} aria-hidden="true" />
+            <span>Due / Expiry</span>
+            {dueExpiryFilterCount > 0 && (
+              <span className="zd-filter-count-badge" id="badge-due-expiry-count">
+                {dueExpiryFilterCount}
+              </span>
+            )}
+          </button>
+
+          {/* 2. Existing Filters Button */}
           <button
             ref={filterButtonRef}
             type="button"
             id="btn-docs-filter-toggle"
             className={`zd-btn-action zd-btn-action--secondary zd-btn-filter ${
-              activeFilterCount > 0 ? 'active' : ''
+              mainFilterCount > 0 ? 'active' : ''
             }`}
-            onClick={() => {
-              if (!filtersOpen) updatePopoverPosition();
-              setFiltersOpen(!filtersOpen);
-            }}
+            onClick={toggleMainFiltersPopover}
             aria-expanded={filtersOpen}
             aria-haspopup="dialog"
             aria-label="Toggle document filters popover"
           >
             <SlidersHorizontal size={15} aria-hidden="true" />
             <span>Filters</span>
-            {activeFilterCount > 0 && (
-              <span className="zd-filter-count-badge">{activeFilterCount}</span>
+            {mainFilterCount > 0 && (
+              <span className="zd-filter-count-badge" id="badge-main-filters-count">
+                {mainFilterCount}
+              </span>
             )}
           </button>
         </div>
       </div>
+
+      {/* Due / Expiry Popover rendered via Portal */}
+      {dueExpiryOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={dueExpiryPopoverRef}
+          className="zd-docs-filter-popover zd-docs-filter-popover--portal"
+          id="docs-due-expiry-popover"
+          role="dialog"
+          aria-label="Due and Expiry Date Filters"
+          aria-modal="false"
+          style={{
+            position: 'fixed',
+            top: `${dueExpiryPopoverPos.top}px`,
+            left: `${dueExpiryPopoverPos.left}px`,
+            width: `${dueExpiryPopoverPos.width}px`,
+            maxHeight: dueExpiryPopoverPos.maxHeight ? `${dueExpiryPopoverPos.maxHeight}px` : undefined,
+            zIndex: 99999
+          }}
+        >
+          <div className="zd-filter-popover-header">
+            <strong>Due / Expiry Filters</strong>
+            <button
+              type="button"
+              className="zd-link-btn"
+              onClick={handleClearDueExpiryFilters}
+              style={{ fontSize: 12 }}
+            >
+              Clear
+            </button>
+          </div>
+
+          {/* Due Date Filter */}
+          <div className="zd-filter-group">
+            <label htmlFor="filter-select-due-date" className="zd-filter-label">
+              Due Date
+            </label>
+            <select
+              id="filter-select-due-date"
+              className="zd-form-select"
+              value={draftDueDate}
+              onChange={(e) => setDraftDueDate(e.target.value)}
+            >
+              {DUE_DATE_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Expiry Date Filter */}
+          <div className="zd-filter-group">
+            <label htmlFor="filter-select-expiry-date" className="zd-filter-label">
+              Expiry Date
+            </label>
+            <select
+              id="filter-select-expiry-date"
+              className="zd-form-select"
+              value={draftExpiryDate}
+              onChange={(e) => setDraftExpiryDate(e.target.value)}
+            >
+              {EXPIRY_DATE_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="zd-filter-popover-actions" style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              id="btn-due-expiry-clear"
+              className="zd-btn-action zd-btn-action--secondary"
+              style={{ flex: 1, height: 38 }}
+              onClick={handleClearDueExpiryFilters}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              id="btn-due-expiry-apply"
+              className="zd-btn-action zd-btn-action--primary"
+              style={{ flex: 1, height: 38 }}
+              onClick={handleApplyDueExpiryFilters}
+            >
+              Apply
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Filters Popover rendered via Portal to guarantee rendering above the table and outside parent stacking contexts */}
       {filtersOpen && typeof document !== 'undefined' && createPortal(
@@ -567,10 +853,10 @@ export default function CADocumentsScreen() {
             <button
               type="button"
               className="zd-link-btn"
-              onClick={handleClearFilters}
+              onClick={handleClearMainFilters}
               style={{ fontSize: 12 }}
             >
-              Clear All
+              Clear
             </button>
           </div>
 
@@ -582,8 +868,8 @@ export default function CADocumentsScreen() {
             <select
               id="filter-select-status"
               className="zd-form-select"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              value={draftStatus}
+              onChange={(e) => setDraftStatus(e.target.value)}
             >
               {DOCUMENT_STATUSES.map((st) => (
                 <option key={st.id} value={st.id}>
@@ -601,8 +887,8 @@ export default function CADocumentsScreen() {
             <select
               id="filter-select-type"
               className="zd-form-select"
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
+              value={draftType}
+              onChange={(e) => setDraftType(e.target.value)}
             >
               {DOCUMENT_TYPES.map((t) => (
                 <option key={t} value={t}>
@@ -620,8 +906,8 @@ export default function CADocumentsScreen() {
             <select
               id="filter-select-date"
               className="zd-form-select"
-              value={dateRangeFilter}
-              onChange={(e) => setDateRangeFilter(e.target.value)}
+              value={draftDateRange}
+              onChange={(e) => setDraftDateRange(e.target.value)}
             >
               <option value="ALL">All Time</option>
               <option value="7d">Last 7 Days</option>
@@ -630,14 +916,24 @@ export default function CADocumentsScreen() {
             </select>
           </div>
 
-          <div className="zd-filter-popover-actions">
+          <div className="zd-filter-popover-actions" style={{ display: 'flex', gap: 8 }}>
             <button
               type="button"
-              className="zd-btn-action zd-btn-action--primary"
-              style={{ width: '100%', height: 38 }}
-              onClick={() => handleApplyFilters(statusFilter, typeFilter, dateRangeFilter)}
+              id="btn-filter-clear-all"
+              className="zd-btn-action zd-btn-action--secondary"
+              style={{ flex: 1, height: 38 }}
+              onClick={handleClearMainFilters}
             >
-              Apply Filters
+              Clear
+            </button>
+            <button
+              type="button"
+              id="btn-filter-apply"
+              className="zd-btn-action zd-btn-action--primary"
+              style={{ flex: 1, height: 38 }}
+              onClick={handleApplyMainFilters}
+            >
+              Apply
             </button>
           </div>
         </div>,
@@ -665,56 +961,107 @@ export default function CADocumentsScreen() {
         </div>
       )}
 
-      {/* Result Count and Quick Filter Summary */}
-      <div className="zd-docs-summary-row">
-        <span className="zd-docs-counter">
-          Showing <strong>{documents.length}</strong> of <strong>{totalRecords}</strong> documents
-        </span>
-
-        {activeFilterCount > 0 && (
-          <div className="zd-active-filter-chips">
-            {clientId && (
-              <span className="zd-filter-chip zd-filter-chip--client">
-                Client: {displayClientName}
-                <button
-                  type="button"
-                  onClick={handleClearClientFilter}
-                  aria-label="Clear client filter"
-                >
-                  ×
-                </button>
-              </span>
-            )}
-            {statusFilter !== 'ALL' && (
-              <span className="zd-filter-chip">
-                Status: {statusFilter}
-                <button type="button" onClick={() => setStatusFilter('ALL')} aria-label="Remove status filter">
-                  ×
-                </button>
-              </span>
-            )}
-            {typeFilter !== 'ALL' && (
-              <span className="zd-filter-chip">
-                Type: {typeFilter}
-                <button type="button" onClick={() => setTypeFilter('ALL')} aria-label="Remove type filter">
-                  ×
-                </button>
-              </span>
-            )}
-            {dateRangeFilter !== 'ALL' && (
-              <span className="zd-filter-chip">
-                Period: {dateRangeFilter}
-                <button type="button" onClick={() => setDateRangeFilter('ALL')} aria-label="Remove date filter">
-                  ×
-                </button>
-              </span>
-            )}
-            <button type="button" className="zd-link-btn" onClick={handleClearFilters}>
-              Reset all
-            </button>
-          </div>
-        )}
-      </div>
+      {/* Active Filter Labels (Rendered only when active filters exist) */}
+      {totalActiveFilterCount > 0 && (
+        <div className="zd-active-filter-chips-bar" role="region" aria-label="Active filters">
+          <span className="zd-active-filters-label">Active Filters:</span>
+          {clientId && (
+            <span className="zd-filter-chip zd-filter-chip--client">
+              Client: {displayClientName}
+              <button
+                type="button"
+                onClick={handleClearClientFilter}
+                aria-label="Clear client filter"
+              >
+                ×
+              </button>
+            </span>
+          )}
+          {statusFilter !== 'ALL' && (
+            <span className="zd-filter-chip">
+              Status: {DOCUMENT_STATUSES.find((s) => s.id === statusFilter)?.label || statusFilter}
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter('ALL');
+                  setDraftStatus('ALL');
+                  setCurrentPage(1);
+                }}
+                aria-label="Remove status filter"
+              >
+                ×
+              </button>
+            </span>
+          )}
+          {typeFilter !== 'ALL' && (
+            <span className="zd-filter-chip">
+              Type: {typeFilter}
+              <button
+                type="button"
+                onClick={() => {
+                  setTypeFilter('ALL');
+                  setDraftType('ALL');
+                  setCurrentPage(1);
+                }}
+                aria-label="Remove type filter"
+              >
+                ×
+              </button>
+            </span>
+          )}
+          {dateRangeFilter !== 'ALL' && (
+            <span className="zd-filter-chip">
+              Created: {dateRangeFilter === '7d' ? 'Last 7 Days' : dateRangeFilter === '30d' ? 'Last 30 Days' : 'Last 90 Days'}
+              <button
+                type="button"
+                onClick={() => {
+                  setDateRangeFilter('ALL');
+                  setDraftDateRange('ALL');
+                  setCurrentPage(1);
+                }}
+                aria-label="Remove date filter"
+              >
+                ×
+              </button>
+            </span>
+          )}
+          {dueDateFilter !== 'ANY' && (
+            <span className="zd-filter-chip">
+              Due: {DUE_DATE_FILTER_OPTIONS.find((o) => o.value === dueDateFilter)?.label || dueDateFilter}
+              <button
+                type="button"
+                onClick={() => {
+                  setDueDateFilter('ANY');
+                  setDraftDueDate('ANY');
+                  setCurrentPage(1);
+                }}
+                aria-label="Remove due date filter"
+              >
+                ×
+              </button>
+            </span>
+          )}
+          {expiryDateFilter !== 'ANY' && (
+            <span className="zd-filter-chip">
+              Expiry: {EXPIRY_DATE_FILTER_OPTIONS.find((o) => o.value === expiryDateFilter)?.label || expiryDateFilter}
+              <button
+                type="button"
+                onClick={() => {
+                  setExpiryDateFilter('ANY');
+                  setDraftExpiryDate('ANY');
+                  setCurrentPage(1);
+                }}
+                aria-label="Remove expiry date filter"
+              >
+                ×
+              </button>
+            </span>
+          )}
+          <button type="button" className="zd-link-btn" onClick={handleClearAllFilters}>
+            Clear all
+          </button>
+        </div>
+      )}
 
       {/* 3. DOCUMENTS TABLE (Sketch Section 3) */}
       <div className="zd-docs-table-card zd-glass-card">
@@ -732,14 +1079,14 @@ export default function CADocumentsScreen() {
             <h3 className="zd-empty-title">
               {clientId
                 ? 'No documents found for this client'
-                : searchQuery || activeFilterCount > 0
+                : searchQuery || totalActiveFilterCount > 0
                 ? 'No matching documents found'
                 : 'No documents in practice vault'}
             </h3>
             <p className="zd-empty-sub">
               {clientId
                 ? `No statutory or filing documents currently exist for ${displayClientName}.`
-                : searchQuery || activeFilterCount > 0
+                : searchQuery || totalActiveFilterCount > 0
                 ? 'Try adjusting your search query or clearing status and type filters.'
                 : 'Click "Add Client" above to initialize your first document draft.'}
             </p>
@@ -763,14 +1110,15 @@ export default function CADocumentsScreen() {
                   <span>Add Client & Create Document</span>
                 </button>
               </div>
-            ) : searchQuery || activeFilterCount > 0 ? (
+            ) : searchQuery || totalActiveFilterCount > 0 ? (
               <button
                 type="button"
                 className="zd-btn-action zd-btn-action--secondary"
-                onClick={handleClearFilters}
+                id="btn-empty-clear-filters"
+                onClick={handleClearAllFilters}
               >
                 <RotateCcw size={14} />
-                <span>Reset Filters</span>
+                <span>Clear Filters</span>
               </button>
             ) : (
               <button
@@ -1379,6 +1727,9 @@ export default function CADocumentsScreen() {
           setSelectedDoc(null);
         }}
         document={selectedDoc}
+        onSendReminder={(doc) => {
+          showToast(`Reminder dispatched to ${doc.client} for document ${doc.ref}`, 'success');
+        }}
       />
 
       <CompletionModal
@@ -1391,6 +1742,31 @@ export default function CADocumentsScreen() {
         onOpenPreview={(docId) => {
           setSelectedDoc(documents.find((d) => d.id === docId) || selectedDoc);
           setActiveModal('preview');
+        }}
+      />
+
+      {/* Bulk Client & Document Upload Modal */}
+      <BulkUploadModal
+        isOpen={isBulkUploadOpen}
+        onClose={() => setIsBulkUploadOpen(false)}
+        onImportSuccess={(job) => {
+          showToast(`Import Job ${job.jobId} completed: ${job.successCount} draft documents created.`, 'success');
+          loadDocuments();
+        }}
+        onOpenBatchInvite={(createdDocs) => {
+          setBatchInviteDocs(createdDocs);
+          setIsBatchInviteOpen(true);
+        }}
+      />
+
+      {/* Batch Signatory Review Invitation Modal */}
+      <BatchInviteModal
+        isOpen={isBatchInviteOpen}
+        documents={batchInviteDocs}
+        onClose={() => setIsBatchInviteOpen(false)}
+        onBatchComplete={(res) => {
+          showToast(`Batch dispatch complete: ${res.sentCount} review invitations sent.`, 'success');
+          loadDocuments();
         }}
       />
     </div>

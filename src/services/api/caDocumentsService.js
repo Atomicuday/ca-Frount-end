@@ -6,9 +6,115 @@
 import { api } from './client.js';
 import { MOCK_CA_DOCUMENTS, BACKEND_PASSWORD_POLICY } from '../../mock/caDocumentsData.js';
 
-let localDocumentsStore = [...MOCK_CA_DOCUMENTS];
+const STORAGE_DOCS_KEY = 'zd_ca_documents_store';
+
+function loadInitialDocuments() {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const stored = window.localStorage.getItem(STORAGE_DOCS_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {
+      // Fallback to mock documents on parse error
+    }
+  }
+  return [...MOCK_CA_DOCUMENTS];
+}
+
+let localDocumentsStore = loadInitialDocuments();
+
+function persistDocumentsStore() {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem(STORAGE_DOCS_KEY, JSON.stringify(localDocumentsStore));
+    } catch {
+      // Ignore quota errors in demo mode
+    }
+  }
+}
+
+export const DUE_DATE_FILTER_OPTIONS = [
+  { value: 'ANY', label: 'All' },
+  { value: 'OVERDUE', label: 'Overdue' },
+  { value: 'TODAY', label: 'Due Today' },
+  { value: 'NEXT_7', label: 'Due in 7 Days' },
+  { value: 'NEXT_30', label: 'Due in 30 Days' }
+];
+
+export const EXPIRY_DATE_FILTER_OPTIONS = [
+  { value: 'ANY', label: 'All' },
+  { value: 'EXPIRED', label: 'Expired' },
+  { value: 'TODAY', label: 'Expires Today' },
+  { value: 'NEXT_7', label: 'Expiring in 7 Days' },
+  { value: 'NEXT_30', label: 'Expiring in 30 Days' }
+];
+
+export const DUE_EXPIRY_FILTER_OPTIONS = [
+  { value: 'ALL', label: 'All Documents' },
+  { value: 'TRACKED', label: 'All Tracked' },
+  { value: 'OVERDUE', label: 'Overdue' },
+  { value: 'DUE_7', label: 'Due in 7 Days' },
+  { value: 'DUE_30', label: 'Due in 30 Days' },
+  { value: 'EXPIRED', label: 'Expired' },
+  { value: 'EXPIRING_30', label: 'Expiring in 30 Days' }
+];
+
+/**
+ * Normalizes input date to midnight Date object in local calendar time for precise boundary math.
+ */
+function parseLocalDateBoundary(val) {
+  if (!val) return null;
+  if (val instanceof Date) {
+    return isNaN(val.getTime()) ? null : new Date(val.getFullYear(), val.getMonth(), val.getDate());
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+      const parts = trimmed.split('T')[0].split('-');
+      return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    }
+    const parsed = new Date(trimmed);
+    if (!isNaN(parsed.getTime())) {
+      return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+    }
+  }
+  return null;
+}
+
+/**
+ * Calculates whole calendar day difference: (target - reference)
+ * < 0: Past (Overdue / Expired)
+ * === 0: Today
+ * > 0: Future upcoming
+ */
+function getCalendarDayDifference(targetVal, refDate = new Date()) {
+  const target = parseLocalDateBoundary(targetVal);
+  if (!target) return null;
+  const ref = parseLocalDateBoundary(refDate) || new Date();
+  const diffMs = target.getTime() - ref.getTime();
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
+}
 
 export const caDocumentsService = {
+  /**
+   * Reset local in-memory and browser store back to default mock records.
+   */
+  resetDocumentsStore: () => {
+    localDocumentsStore = [...MOCK_CA_DOCUMENTS];
+    persistDocumentsStore();
+    return localDocumentsStore;
+  },
+
+  /**
+   * Alias for draft review WhatsApp notification dispatch.
+   */
+  requestWhatsAppDraftReview: async (documentId) => {
+    return caDocumentsService.requestDraftReviewNotification(documentId, 'whatsapp');
+  },
   /**
    * Fetch documents with search, multifaceted filters, and pagination.
    */
@@ -17,6 +123,9 @@ export const caDocumentsService = {
     status = 'ALL',
     docType = 'ALL',
     dateRange = 'ALL',
+    dueExpiryFilter = 'ALL',
+    dueDateFilter = 'ANY',
+    expiryDateFilter = 'ANY',
     clientId = null,
     page = 1,
     limit = 10
@@ -27,6 +136,9 @@ export const caDocumentsService = {
         status,
         docType,
         dateRange,
+        dueExpiryFilter,
+        dueDateFilter,
+        expiryDateFilter,
         clientId,
         page,
         limit
@@ -74,7 +186,7 @@ export const caDocumentsService = {
       result = result.filter((doc) => doc.docType.toLowerCase() === docType.toLowerCase());
     }
 
-    // Date range filter
+    // Created Date range filter
     if (dateRange && dateRange !== 'ALL') {
       const now = new Date('2026-11-23T12:00:00Z');
       result = result.filter((doc) => {
@@ -83,6 +195,98 @@ export const caDocumentsService = {
         if (dateRange === '7d') return diffDays <= 7;
         if (dateRange === '30d') return diffDays <= 30;
         if (dateRange === '90d') return diffDays <= 90;
+        return true;
+      });
+    }
+
+    // Due Date Filter (Separate selector: ANY, OVERDUE, TODAY, NEXT_7, NEXT_30)
+    if (dueDateFilter && dueDateFilter !== 'ANY' && dueDateFilter !== 'Any') {
+      result = result.filter((doc) => {
+        // Missing dates match Any, but not a specific date filter
+        if (!doc.dueDate) return false;
+        const diffDays = getCalendarDayDifference(doc.dueDate);
+        if (diffDays === null) return false;
+
+        if (dueDateFilter === 'OVERDUE' || dueDateFilter === 'Overdue') {
+          // Past dates only; "Today" is separate from overdue
+          return diffDays < 0;
+        }
+        if (dueDateFilter === 'TODAY' || dueDateFilter === 'Due Today') {
+          // "Today" is separate from overdue/expired
+          return diffDays === 0;
+        }
+        if (dueDateFilter === 'NEXT_7' || dueDateFilter === 'Due in 7 Days') {
+          // Upcoming ranges include today and exclude past dates
+          return diffDays >= 0 && diffDays <= 7;
+        }
+        if (dueDateFilter === 'NEXT_30' || dueDateFilter === 'Due in 30 Days') {
+          // Upcoming ranges include today and exclude past dates
+          return diffDays >= 0 && diffDays <= 30;
+        }
+        return true;
+      });
+    }
+
+    // Expiry Date Filter (Separate selector: ANY, EXPIRED, TODAY, NEXT_7, NEXT_30)
+    if (expiryDateFilter && expiryDateFilter !== 'ANY' && expiryDateFilter !== 'Any') {
+      result = result.filter((doc) => {
+        // Missing dates match Any, but not a specific date filter
+        if (!doc.expiryDate) return false;
+        const diffDays = getCalendarDayDifference(doc.expiryDate);
+        if (diffDays === null) return false;
+
+        if (expiryDateFilter === 'EXPIRED' || expiryDateFilter === 'Expired') {
+          // Past dates only; "Today" is separate from expired
+          return diffDays < 0;
+        }
+        if (expiryDateFilter === 'TODAY' || expiryDateFilter === 'Expires Today') {
+          // "Today" is separate from overdue/expired
+          return diffDays === 0;
+        }
+        if (expiryDateFilter === 'NEXT_7' || expiryDateFilter === 'Expiring in 7 Days') {
+          // Upcoming ranges include today and exclude past dates
+          return diffDays >= 0 && diffDays <= 7;
+        }
+        if (expiryDateFilter === 'NEXT_30' || expiryDateFilter === 'Expiring in 30 Days') {
+          // Upcoming ranges include today and exclude past dates
+          return diffDays >= 0 && diffDays <= 30;
+        }
+        return true;
+      });
+    }
+
+    // Legacy Due / Expiry Filter fallback (for backwards compatibility if specific filters are not used)
+    if (
+      (dueDateFilter === 'ANY' || dueDateFilter === 'Any') &&
+      (expiryDateFilter === 'ANY' || expiryDateFilter === 'Any') &&
+      dueExpiryFilter &&
+      dueExpiryFilter !== 'ALL' &&
+      dueExpiryFilter !== 'All Documents'
+    ) {
+      result = result.filter((doc) => {
+        const dueDiff = doc.dueDate ? getCalendarDayDifference(doc.dueDate) : null;
+        const isDueOverdue = dueDiff !== null && dueDiff < 0 && doc.statusCode !== 'completed';
+        const expiryDiff = doc.expiryDate ? getCalendarDayDifference(doc.expiryDate) : null;
+        const isExpired = expiryDiff !== null && expiryDiff < 0;
+
+        if (dueExpiryFilter === 'TRACKED' || dueExpiryFilter === 'All Tracked') {
+          return Boolean(doc.dueDate || doc.expiryDate);
+        }
+        if (dueExpiryFilter === 'OVERDUE' || dueExpiryFilter === 'Overdue') {
+          return isDueOverdue;
+        }
+        if (dueExpiryFilter === 'DUE_7' || dueExpiryFilter === 'Due in 7 Days') {
+          return dueDiff !== null && dueDiff >= 0 && dueDiff <= 7;
+        }
+        if (dueExpiryFilter === 'DUE_30' || dueExpiryFilter === 'Due in 30 Days') {
+          return dueDiff !== null && dueDiff >= 0 && dueDiff <= 30;
+        }
+        if (dueExpiryFilter === 'EXPIRED' || dueExpiryFilter === 'Expired') {
+          return isExpired;
+        }
+        if (dueExpiryFilter === 'EXPIRING_30' || dueExpiryFilter === 'Expiring in 30 Days') {
+          return expiryDiff !== null && expiryDiff >= 0 && expiryDiff <= 30;
+        }
         return true;
       });
     }
@@ -247,6 +451,7 @@ export const caDocumentsService = {
     };
 
     localDocumentsStore = [newDoc, ...localDocumentsStore];
+    persistDocumentsStore();
     return {
       success: true,
       document: newDoc,
@@ -298,6 +503,7 @@ export const caDocumentsService = {
     };
 
     localDocumentsStore[docIndex] = updatedDoc;
+    persistDocumentsStore();
 
     return {
       success: true,
@@ -361,6 +567,7 @@ export const caDocumentsService = {
     };
 
     localDocumentsStore[docIndex] = updatedDoc;
+    persistDocumentsStore();
 
     return {
       success: true,
@@ -553,6 +760,7 @@ export const caDocumentsService = {
     };
 
     localDocumentsStore[docIndex] = updatedDoc;
+    persistDocumentsStore();
 
     return {
       success: true,
@@ -585,6 +793,7 @@ export const caDocumentsService = {
       }
       return doc;
     });
+    persistDocumentsStore();
 
     return { success: true, message: 'Document inputs updated successfully.' };
   },
@@ -630,6 +839,7 @@ export const caDocumentsService = {
     };
 
     localDocumentsStore = [revisionDoc, ...localDocumentsStore];
+    persistDocumentsStore();
     return {
       success: true,
       document: revisionDoc,
@@ -700,6 +910,7 @@ export const caDocumentsService = {
     };
 
     localDocumentsStore[docIndex] = updatedDoc;
+    persistDocumentsStore();
 
     return {
       success: true,
@@ -768,6 +979,7 @@ export const caDocumentsService = {
     };
 
     localDocumentsStore[docIndex] = updatedDoc;
+    persistDocumentsStore();
 
     return {
       success: true,

@@ -6,22 +6,24 @@
 .ca-documents-container {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
   width: 100%;
 }
 
 /* ── 1. Page Header ── */
 .zd-docs-page-header {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
   width: 100%;
 }
 
 .zd-docs-header-title-box {
-  width: 100%;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
-  padding-bottom: 12px;
+  flex: 1;
+  min-width: 240px;
 }
 
 .zd-docs-page-title {
@@ -41,8 +43,38 @@
 
 .zd-docs-header-action-row {
   display: flex;
-  justify-content: flex-end;
-  width: 100%;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.zd-btn-bulk-upload {
+  background: #ffffff;
+  color: #1d4ed8;
+  border: 1.5px solid #bfdbfe;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  font-size: 13.5px;
+  font-weight: 700;
+  padding: 10px 18px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.zd-btn-bulk-upload:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1e40af;
+  transform: translateY(-1px);
+}
+
+.zd-btn-bulk-upload:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 
 .zd-btn-add-client {
@@ -133,6 +165,13 @@
 
 .zd-docs-filters-dropdown-wrap {
   position: relative;
+}
+
+.zd-docs-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .zd-btn-filter {
@@ -318,6 +357,21 @@
   padding: 0 4px;
   font-size: 13px;
   color: #64748b;
+}
+
+.zd-active-filter-chips-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 4px;
+}
+
+.zd-active-filters-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #64748b;
+  margin-right: 4px;
 }
 
 .zd-docs-counter strong {
@@ -2603,7 +2657,9 @@
   }
 
   .zd-docs-page-header {
-    gap: 10px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
   }
 
   .zd-docs-page-title {
@@ -2612,10 +2668,16 @@
 
   .zd-docs-header-action-row {
     width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
   }
 
+  .zd-btn-bulk-upload,
   .zd-btn-add-client {
-    width: 100%;
+    flex: 1 1 calc(50% - 5px);
+    min-width: 135px;
     justify-content: center;
   }
 
@@ -2627,8 +2689,19 @@
   }
 
   .zd-docs-search-wrap,
-  .zd-docs-filters-dropdown-wrap {
+  .zd-docs-filters-dropdown-wrap,
+  .zd-docs-toolbar-actions {
     width: 100%;
+  }
+
+  .zd-docs-toolbar-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .zd-docs-toolbar-actions .zd-btn-filter {
+    flex: 1;
+    justify-content: center;
   }
 
   .zd-btn-filter {
